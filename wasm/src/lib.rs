@@ -2,16 +2,25 @@
 
 extern crate alloc;
 
+mod api;
+mod dataset;
+mod evaluation;
+mod routes;
+mod scoring;
+mod storage;
+mod submission;
 mod types;
 
 use alloc::vec::Vec;
 use bincode::Options;
-use platform_challenge_sdk_wasm::{Challenge, EvaluationInput, EvaluationOutput};
+use platform_challenge_sdk_wasm::{Challenge, EvaluationInput, EvaluationOutput, WasmRouteRequest};
 
+use crate::routes::get_route_definitions;
 use crate::types::{ChallengeParams, Submission};
 
 const MAX_SUBMISSION_SIZE: u64 = 4 * 1024 * 1024;
 const MAX_PARAMS_SIZE: u64 = 1 * 1024 * 1024;
+const MAX_ROUTE_REQUEST_SIZE: u64 = 1 * 1024 * 1024;
 
 fn bincode_options_submission() -> impl Options {
     bincode::DefaultOptions::new()
@@ -23,6 +32,13 @@ fn bincode_options_submission() -> impl Options {
 fn bincode_options_params() -> impl Options {
     bincode::DefaultOptions::new()
         .with_limit(MAX_PARAMS_SIZE)
+        .with_fixint_encoding()
+        .allow_trailing_bytes()
+}
+
+fn bincode_options_route_request() -> impl Options {
+    bincode::DefaultOptions::new()
+        .with_limit(MAX_ROUTE_REQUEST_SIZE)
         .with_fixint_encoding()
         .allow_trailing_bytes()
 }
@@ -95,11 +111,18 @@ impl Challenge for DataFabricationChallenge {
     }
 
     fn routes(&self) -> Vec<u8> {
-        Vec::new()
+        let route_defs = get_route_definitions();
+        bincode::serialize(&route_defs).unwrap_or_default()
     }
 
-    fn handle_route(&self, _request: &[u8]) -> Vec<u8> {
-        Vec::new()
+    fn handle_route(&self, request_data: &[u8]) -> Vec<u8> {
+        let request: WasmRouteRequest =
+            match bincode_options_route_request().deserialize(request_data) {
+                Ok(r) => r,
+                Err(_) => return Vec::new(),
+            };
+        let response = routes::handle_route_request(&request);
+        bincode::serialize(&response).unwrap_or_default()
     }
 }
 

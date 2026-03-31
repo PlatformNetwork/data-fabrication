@@ -1,5 +1,9 @@
+pub mod status;
+pub mod submit;
 pub mod ui;
 
+pub use status::status_command;
+pub use submit::{parse_keypair, submit_command};
 pub use ui::App;
 
 #[derive(Debug, Clone, PartialEq)]

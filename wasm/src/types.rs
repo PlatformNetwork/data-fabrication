@@ -8,6 +8,32 @@ use alloc::string::String;
 use alloc::vec::Vec;
 use serde::{Deserialize, Serialize};
 
+/// State of an agent's submission in the evaluation pipeline.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum AgentState {
+    /// Submission received, waiting to be evaluated.
+    Pending,
+    /// Currently being evaluated.
+    Evaluating,
+    /// Evaluation complete, score assigned.
+    Scored,
+    /// Evaluation failed with an error.
+    Failed,
+}
+
+/// Entry on the challenge leaderboard.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct LeaderboardEntry {
+    /// The miner's hotkey identifier.
+    pub hotkey: String,
+    /// The final score (0.0 to 1.0).
+    pub score: f64,
+    /// Rank on the leaderboard (1-based).
+    pub rank: u32,
+    /// Unix timestamp of when the score was recorded.
+    pub timestamp: u64,
+}
+
 /// Submission data sent from the miner.
 #[derive(Debug, Clone, Serialize, Deserialize)]
 pub struct Submission {
@@ -66,4 +92,47 @@ pub struct EvaluationResult {
     pub size_bytes: u64,
     /// Error message if failed
     pub error: Option<String>,
+}
+
+/// Quality metrics for a dataset used in scoring calculation.
+/// Each metric is a value in the range [0.0, 1.0].
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct DatasetQualityMetrics {
+    /// Format validity score (schema compliance, structure correctness)
+    pub format_score: f64,
+    /// Content quality score (semantic coherence, relevance)
+    pub quality_score: f64,
+    /// Originality score (novelty, diversity of content)
+    pub originality_score: f64,
+}
+
+/// Status tracking for a submission.
+#[derive(Clone, Debug, Serialize, Deserialize)]
+pub struct SubmissionStatus {
+    /// Unique submission identifier.
+    pub id: String,
+    /// Current state of the submission.
+    pub state: AgentState,
+    /// Final score (if evaluated).
+    pub score: Option<f64>,
+    /// Unix timestamp when submission was created.
+    pub created_at: u64,
+    /// Unix timestamp of last status update.
+    pub updated_at: u64,
+}
+
+/// Upload control state for sudo owner.
+/// Controls whether uploads are accepted and processed.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Serialize, Deserialize)]
+pub enum UploadState {
+    /// Reject all uploads (403 Forbidden)
+    Disabled,
+    /// Accept uploads but queue without processing
+    Pending,
+    /// Full processing pipeline (default)
+    Enabled,
+}
+
+impl Default for UploadState {
+    fn default() -> Self { Self::Enabled }
 }
