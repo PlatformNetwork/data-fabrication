@@ -33,6 +33,9 @@ pub mod consensus;
 #[cfg(feature = "std")]
 pub mod cache;
 
+#[cfg(feature = "std")]
+pub mod agent_sandbox;
+
 pub mod config;
 pub mod schema;
 pub mod scoring_types;
@@ -80,6 +83,9 @@ pub use consensus::{ConsensusResult, consensus};
 
 #[cfg(feature = "std")]
 pub use cache::{EvaluationCache, hash_conversation, DEFAULT_TTL};
+
+#[cfg(feature = "std")]
+pub use agent_sandbox::{AgentWorkspace, SandboxError, SandboxConfig as AgentSandboxConfig};
 
 #[cfg(feature = "std")]
 extern crate std;

@@ -1474,6 +1474,7 @@ dependencies = [
  "bincode",
  "log",
  "proptest",
+ "regex",
  "reqwest",
  "rlimit",
  "rustpython-parser",

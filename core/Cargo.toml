@@ -8,7 +8,7 @@ description = "Core traits and types shared between WASM and server implementati
 
 [features]
 default = ["alloc"]
-std = ["thiserror", "serde/std", "serde_json/std", "rustpython-parser", "tempfile", "log"]
+std = ["thiserror", "serde/std", "serde_json/std", "rustpython-parser", "tempfile", "log", "regex"]
 alloc = []
 http-client = ["reqwest", "tokio"]
 
@@ -20,6 +20,7 @@ thiserror = { version = "2.0", optional = true }
 rustpython-parser = { version = "0.4", optional = true }
 tempfile = { version = "3.15", optional = true }
 log = { version = "0.4", optional = true }
+regex = { version = "1.10", optional = true }
 sha2 = { version = "0.10", default-features = false }
 # For HTTP client (optional, for server builds)
 reqwest = { version = "0.12", features = ["rustls-tls", "json"], optional = true }
