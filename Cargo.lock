@@ -1439,6 +1439,7 @@ dependencies = [
  "flate2",
  "hex",
  "parking_lot 0.12.5",
+ "plagiarism-sdk",
  "pretty_assertions",
  "reqwest",
  "schnorrkel",
@@ -1477,7 +1478,7 @@ dependencies = [
  "regex",
  "reqwest",
  "rlimit",
- "rustpython-parser",
+ "rustpython-parser 0.4.0",
  "serde",
  "serde_json",
  "sha2 0.10.9",
@@ -3757,6 +3758,23 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "7edddbd0b52d732b21ad9a5fab5c704c14cd949e5e9a1ec5929a24fded1b904c"
 
 [[package]]
+name = "plagiarism-sdk"
+version = "0.1.0"
+dependencies = [
+ "chrono",
+ "regex",
+ "reqwest",
+ "rustpython-parser 0.3.1",
+ "serde",
+ "serde_json",
+ "sha2 0.10.9",
+ "tempfile",
+ "thiserror 2.0.18",
+ "walkdir",
+ "zip",
+]
+
+[[package]]
 name = "plain"
 version = "0.2.3"
 source = "registry+https://github.com/rust-lang/crates.io-index"
@@ -4569,14 +4587,50 @@ dependencies = [
 
 [[package]]
 name = "rustpython-ast"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "c2c72612d246194023a643d342ac53e4118c300cbc3ada31ff1245e7636db860"
+dependencies = [
+ "is-macro",
+ "malachite-bigint",
+ "rustpython-parser-core 0.3.1",
+ "static_assertions",
+]
+
+[[package]]
+name = "rustpython-ast"
 version = "0.4.0"
 source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "4cdaf8ee5c1473b993b398c174641d3aa9da847af36e8d5eb8291930b72f31a5"
 dependencies = [
  "is-macro",
  "malachite-bigint",
- "rustpython-parser-core",
+ "rustpython-parser-core 0.4.0",
  "static_assertions",
+]
+
+[[package]]
+name = "rustpython-parser"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "51e73421499eff08722b979d8494c3f1bc035908931a28607a9f17be6143ac11"
+dependencies = [
+ "anyhow",
+ "is-macro",
+ "itertools 0.11.0",
+ "lalrpop-util",
+ "log",
+ "malachite-bigint",
+ "num-traits",
+ "phf",
+ "phf_codegen",
+ "rustc-hash 1.1.0",
+ "rustpython-ast 0.3.1",
+ "rustpython-parser-core 0.3.1",
+ "tiny-keccak",
+ "unic-emoji-char",
+ "unic-ucd-ident",
+ "unicode_names2",
 ]
 
 [[package]]
@@ -4595,12 +4649,23 @@ dependencies = [
  "phf",
  "phf_codegen",
  "rustc-hash 1.1.0",
- "rustpython-ast",
- "rustpython-parser-core",
+ "rustpython-ast 0.4.0",
+ "rustpython-parser-core 0.4.0",
  "tiny-keccak",
  "unic-emoji-char",
  "unic-ucd-ident",
  "unicode_names2",
+]
+
+[[package]]
+name = "rustpython-parser-core"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "47f9465e822d45e05304c08f168dd1ffea05d8d95b7a4e18651ef1acb4df097f"
+dependencies = [
+ "is-macro",
+ "memchr",
+ "rustpython-parser-vendored 0.3.1",
 ]
 
 [[package]]
@@ -4611,7 +4676,17 @@ checksum = "b4b6c12fa273825edc7bccd9a734f0ad5ba4b8a2f4da5ff7efe946f066d0f4ad"
 dependencies = [
  "is-macro",
  "memchr",
- "rustpython-parser-vendored",
+ "rustpython-parser-vendored 0.4.0",
+]
+
+[[package]]
+name = "rustpython-parser-vendored"
+version = "0.3.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "f6e43398f39b5e4ce129cb95a8d7b87c6378b056d66c978da86ea2296d861c8f"
+dependencies = [
+ "memchr",
+ "once_cell",
 ]
 
 [[package]]

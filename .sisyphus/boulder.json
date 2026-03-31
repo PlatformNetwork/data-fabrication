@@ -1,8 +1,8 @@
 {
-  "active_plan": "/root/data-fabrication/.sisyphus/plans/llm-similarity-system.md",
-  "started_at": "2026-03-30T19:19:00.000Z",
+  "active_plan": "/root/data-fabrication/.sisyphus/plans/documentation.md",
+  "started_at": "2026-03-30T20:23:26.801Z",
   "session_ids": ["ses_2c02b5993ffe9a0q65YhSgwbg7"],
-  "plan_name": "llm-similarity-system",
+  "plan_name": "documentation",
   "agent": "atlas",
   "worktree_path": null,
   "task_sessions": {}

@@ -15,6 +15,7 @@ path = "src/main.rs"
 [dependencies]
 reqwest = { version = "0.12", features = ["json"] }
 data-fabrication-core = { path = "../core", features = ["std"] }
+plagiarism-sdk = { path = "../../plagiarism-sdk", features = ["std", "python-parser"] }
 axum = { version = "0.7", features = ["multipart", "ws"] }
 tokio = { version = "1", features = ["full", "process", "sync"] }
 tower = "0.5"

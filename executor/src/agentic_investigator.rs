@@ -3,7 +3,7 @@
 //! LLM-powered agent that investigates plagiarism using function calls
 //! in an isolated sandbox environment.
 
-use data_fabrication_core::agent_sandbox::{AgentWorkspace, SandboxError};
+use plagiarism_sdk::AgentWorkspace;
 use serde::{Deserialize, Serialize};
 use std::time::{Duration, Instant};
 use chrono::{DateTime, Utc};
@@ -115,6 +115,39 @@ impl AgenticInvestigator {
         Ok(result)
     }
     
+    /// Investigate from ZIP artifacts using SDK's extract_zip
+    pub async fn investigate_artifacts(
+        &self,
+        artifact_a_name: &str,
+        artifact_a_data: &[u8],
+        artifact_b_name: &str,
+        artifact_b_data: &[u8],
+        initial_similarity: f64,
+    ) -> Result<AgenticInvestigation, InvestigationError> {
+        let start = Instant::now();
+        
+        let workspace = AgentWorkspace::new()
+            .map_err(|e| InvestigationError::SandboxError(e.to_string()))?;
+        
+        // Extract ZIP artifacts using SDK's extract_zip method
+        workspace.extract_zip(artifact_a_name, artifact_a_data)
+            .map_err(|e| InvestigationError::SandboxError(e.to_string()))?;
+        workspace.extract_zip(artifact_b_name, artifact_b_data)
+            .map_err(|e| InvestigationError::SandboxError(e.to_string()))?;
+        
+        // List extracted files for investigation
+        let files_a = workspace.list_dir_recursive(Some(artifact_a_name))
+            .map_err(|e| InvestigationError::SandboxError(e.to_string()))?;
+        let files_b = workspace.list_dir_recursive(Some(artifact_b_name))
+            .map_err(|e| InvestigationError::SandboxError(e.to_string()))?;
+        
+        let prompt = self.build_artifact_prompt(initial_similarity, &files_a, &files_b);
+        
+        let result = self.run_loop(&workspace, &prompt, start).await?;
+        
+        Ok(result)
+    }
+    
     fn build_initial_prompt(&self, similarity: f64) -> String {
         format!(
             r#"You are a plagiarism investigation agent with access to a sandboxed workspace.
@@ -143,6 +176,42 @@ Investigate thoroughly. Look at:
 When ready, call submit_verdict with your conclusion.
 
 Start investigating now."#,
+            similarity * 100.0
+        )
+    }
+    
+    fn build_artifact_prompt(&self, similarity: f64, files_a: &[String], files_b: &[String]) -> String {
+        format!(
+            r#"You are a plagiarism investigation agent with access to a sandboxed workspace.
+
+Artifact A files (first submission):
+{}
+
+Artifact B files (second submission):
+{}
+
+Structural similarity score: {:.1}%
+
+You have these tools available:
+- read_file(path): Read a file in the workspace
+- grep(pattern): Search for patterns across all files
+- find(name): Find files matching a name pattern
+- list_dir(path): List directory contents
+- analyze_ast(path): Get AST structure of a Python file
+- diff(file_a, file_b): Compare two files line by line
+- submit_verdict(verdict): Submit your final verdict
+
+Investigate thoroughly. Look at:
+1. Function structure and naming
+2. Variable patterns
+3. Comments and docstrings
+4. Logic flow
+
+When ready, call submit_verdict with your conclusion.
+
+Start investigating now."#,
+            files_a.iter().map(|f| format!("  - {}", f)).collect::<Vec<_>>().join("\n"),
+            files_b.iter().map(|f| format!("  - {}", f)).collect::<Vec<_>>().join("\n"),
             similarity * 100.0
         )
     }
@@ -211,6 +280,50 @@ mod tests {
         let code_b = "a = 1\nb = a + 2";
         
         let result = investigator.investigate(code_a, code_b, 0.95).await;
+        assert!(result.is_ok());
+    }
+    
+    #[tokio::test]
+    async fn test_investigate_artifacts() {
+        let config = InvestigatorConfig::default();
+        let investigator = AgenticInvestigator::new(config).unwrap();
+        
+        // Create simple ZIP files in memory
+        let mut buf_a = Vec::new();
+        {
+            use std::io::Cursor;
+            use std::io::Write;
+            use zip::write::SimpleFileOptions;
+            use zip::ZipWriter;
+            
+            let w = Cursor::new(&mut buf_a);
+            let mut zip = ZipWriter::new(w);
+            zip.start_file("main.py", SimpleFileOptions::default()).unwrap();
+            zip.write_all(b"def hello(): pass").unwrap();
+            zip.finish().unwrap();
+        }
+        
+        let mut buf_b = Vec::new();
+        {
+            use std::io::Cursor;
+            use std::io::Write;
+            use zip::write::SimpleFileOptions;
+            use zip::ZipWriter;
+            
+            let w = Cursor::new(&mut buf_b);
+            let mut zip = ZipWriter::new(w);
+            zip.start_file("main.py", SimpleFileOptions::default()).unwrap();
+            zip.write_all(b"def greet(): pass").unwrap();
+            zip.finish().unwrap();
+        }
+        
+        let result = investigator.investigate_artifacts(
+            "artifact_a",
+            &buf_a,
+            "artifact_b", 
+            &buf_b,
+            0.95
+        ).await;
         assert!(result.is_ok());
     }
 }
