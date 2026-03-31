@@ -12,6 +12,24 @@ use serde::{Deserialize, Serialize};
 
 extern crate alloc;
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlagiarismAudit {
+    pub is_plagiarism: bool,
+    pub confidence: f64,
+    pub reasoning: String,
+    pub audit: AuditDetails,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditDetails {
+    pub structural_match: f64,
+    pub logic_flow_similarity: bool,
+    pub variable_patterns: String,
+    pub comments_analysis: String,
+    pub code_origin: String,
+    pub recommendation: String,
+}
+
 /// LLM Client trait for evaluating conversations.
 pub trait LlmClient: Send + Sync {
     /// Evaluate a conversation and return a score.

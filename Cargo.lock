@@ -3764,7 +3764,7 @@ checksum = "b4596b6d070b27117e987119b4dac604f3c58cfb0b191112e24771b2faeac1a6"
 [[package]]
 name = "platform-challenge-sdk"
 version = "0.1.0"
-source = "git+https://github.com/PlatformNetwork/platform-v2?rev=8dd66cdd#8dd66cddffde4dce9e2dcdf90d8c0dd5341f04cf"
+source = "git+https://github.com/PlatformNetwork/platform?branch=main#2dba144fcc27d35d32a1dc456f7b7c6842e945e2"
 dependencies = [
  "aes-gcm",
  "anyhow",
@@ -3795,7 +3795,7 @@ dependencies = [
 [[package]]
 name = "platform-challenge-sdk-wasm"
 version = "0.1.0"
-source = "git+https://github.com/PlatformNetwork/platform.git?rev=8b84dde8#8b84dde88b274f08e6b30b2a5ffe1c8b17218866"
+source = "git+https://github.com/PlatformNetwork/platform?branch=main#2dba144fcc27d35d32a1dc456f7b7c6842e945e2"
 dependencies = [
  "bincode",
  "serde",
@@ -3804,7 +3804,7 @@ dependencies = [
 [[package]]
 name = "platform-challenge-sdk-wasm"
 version = "0.1.0"
-source = "git+https://github.com/PlatformNetwork/platform-v2?rev=8dd66cdd#8dd66cddffde4dce9e2dcdf90d8c0dd5341f04cf"
+source = "git+https://github.com/PlatformNetwork/platform.git?rev=8b84dde8#8b84dde88b274f08e6b30b2a5ffe1c8b17218866"
 dependencies = [
  "bincode",
  "serde",
@@ -3813,7 +3813,7 @@ dependencies = [
 [[package]]
 name = "platform-core"
 version = "0.1.0"
-source = "git+https://github.com/PlatformNetwork/platform-v2?rev=8dd66cdd#8dd66cddffde4dce9e2dcdf90d8c0dd5341f04cf"
+source = "git+https://github.com/PlatformNetwork/platform?branch=main#2dba144fcc27d35d32a1dc456f7b7c6842e945e2"
 dependencies = [
  "anyhow",
  "bincode",
@@ -3821,11 +3821,10 @@ dependencies = [
  "chrono",
  "hex",
  "rand 0.8.5",
- "schnorrkel",
  "serde",
  "serde_json",
  "sha2 0.10.9",
- "sp-core 31.0.0",
+ "sp-core 38.1.0",
  "thiserror 2.0.18",
  "tracing",
  "uuid",
@@ -6501,12 +6500,12 @@ dependencies = [
 [[package]]
 name = "wasm-runtime-interface"
 version = "0.1.0"
-source = "git+https://github.com/PlatformNetwork/platform-v2?rev=8dd66cdd#8dd66cddffde4dce9e2dcdf90d8c0dd5341f04cf"
+source = "git+https://github.com/PlatformNetwork/platform?branch=main#2dba144fcc27d35d32a1dc456f7b7c6842e945e2"
 dependencies = [
  "bincode",
  "chrono",
  "ipnet",
- "platform-challenge-sdk-wasm 0.1.0 (git+https://github.com/PlatformNetwork/platform-v2?rev=8dd66cdd)",
+ "platform-challenge-sdk-wasm 0.1.0 (git+https://github.com/PlatformNetwork/platform?branch=main)",
  "reqwest",
  "serde",
  "serde_json",

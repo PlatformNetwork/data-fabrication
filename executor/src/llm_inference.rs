@@ -37,6 +37,24 @@ pub struct PlagiarismVerdict {
     pub reasoning: String,
 }
 
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct AuditDetails {
+    pub structural_match: f64,
+    pub logic_flow_similarity: bool,
+    pub variable_patterns: String,
+    pub comments_analysis: String,
+    pub code_origin: String,
+    pub recommendation: String,
+}
+
+#[derive(Debug, Clone, Serialize, Deserialize)]
+pub struct PlagiarismAudit {
+    pub is_plagiarism: bool,
+    pub confidence: f64,
+    pub reasoning: String,
+    pub audit: AuditDetails,
+}
+
 impl PlagiarismVerdict {
     /// Validates that the verdict has sensible values
     pub fn validate(&self) -> Result<(), LlmInferenceError> {
@@ -189,18 +207,41 @@ impl LlmInference {
 
     fn build_prompt(&self, code_a: &str, code_b: &str, similarity: f64) -> String {
         format!(
-            "You are a plagiarism detection assistant.\n\n\
-            Compare these two Python code snippets and determine if one is plagiarized from the other.\n\n\
-            Code A:\n{}\n\n\
-            Code B:\n{}\n\n\
-            Structural similarity score: {:.1}%\n\n\
-            Analyze the code structure, variable naming patterns, and logic flow.\n\
-            Respond with a JSON object containing:\n\
-            - is_plagiarism: boolean\n\
-            - confidence: number between 0 and 1\n\
-            - reasoning: string\n\n\
-            JSON response:",
-            code_a, code_b, similarity * 100.0
+r#"You are a plagiarism detection expert. Analyze these two Python code snippets.
+
+Code A (from submission):
+```python
+{code_a}
+```
+
+Code B (from submission with highest similarity):
+```python
+{code_b}
+```
+
+Structural similarity: {similarity:.1}%
+
+Analyze: 1) Logic flow 2) Variable naming patterns 3) Comments 4) Code origin
+
+Respond with EXACT JSON format:
+{{
+  "is_plagiarism": boolean,
+  "confidence": number 0.0-1.0,
+  "reasoning": "One sentence summary",
+  "audit": {{
+    "structural_match": number 0.0-1.0,
+    "logic_flow_similarity": boolean,
+    "variable_patterns": "identical" | "similar" | "different",
+    "comments_analysis": "Brief analysis",
+    "code_origin": "Description",
+    "recommendation": "CONFIRM_PLAGIARISM" | "CLEAR" | "FLAG_FOR_REVIEW"
+  }}
+}}
+
+JSON:"#,
+            code_a = code_a,
+            code_b = code_b,
+            similarity = similarity * 100.0
         )
     }
 
@@ -230,10 +271,87 @@ impl LlmInference {
         similarity: f64,
     ) -> Result<PlagiarismVerdict, LlmInferenceError> {
         Ok(PlagiarismVerdict {
-            is_plagiarism: similarity > 0.8,
+            is_plagiarism: similarity >= 0.97,
             confidence: similarity,
             reasoning: "Placeholder: use evaluate_plagiarism_with_retry".to_string(),
         })
+    }
+
+    pub async fn evaluate_plagiarism_with_audit(
+        &self,
+        code_a: &str,
+        code_b: &str,
+        similarity: f64,
+    ) -> Result<PlagiarismAudit, LlmInferenceError> {
+        let verdict = self.evaluate_plagiarism_with_retry(code_a, code_b, similarity).await?;
+        let audit_response = self.evaluate_audit_once(code_a, code_b, similarity).await?;
+        Ok(PlagiarismAudit {
+            is_plagiarism: verdict.is_plagiarism,
+            confidence: verdict.confidence,
+            reasoning: verdict.reasoning,
+            audit: audit_response,
+        })
+    }
+
+    async fn evaluate_audit_once(
+        &self,
+        code_a: &str,
+        code_b: &str,
+        similarity: f64,
+    ) -> Result<AuditDetails, LlmInferenceError> {
+        let prompt = self.build_prompt(code_a, code_b, similarity);
+        
+        let request = PlagiarismRequest {
+            model: &self.config.model,
+            messages: vec![Message {
+                role: "user",
+                content: prompt,
+            }],
+            stream: false,
+        };
+
+        let response = self.client
+            .post(&self.config.endpoint)
+            .json(&request)
+            .send()
+            .await
+            .map_err(|e| {
+                if e.is_timeout() {
+                    LlmInferenceError::Timeout
+                } else {
+                    LlmInferenceError::HttpError(e.to_string())
+                }
+            })?;
+
+        let status = response.status();
+        let body = response.text().await
+            .map_err(|e| LlmInferenceError::HttpError(e.to_string()))?;
+
+        if !status.is_success() {
+            return Err(LlmInferenceError::HttpError(
+                format!("HTTP {}: {}", status, body)
+            ));
+        }
+
+        self.parse_audit_response(&body)
+    }
+
+    fn parse_audit_response(&self, body: &str) -> Result<AuditDetails, LlmInferenceError> {
+        let json_str = body.trim();
+        
+        let start = json_str.find('{').ok_or_else(|| {
+            LlmInferenceError::InvalidResponse("No JSON object found".to_string())
+        })?;
+        let end = json_str.rfind('}').ok_or_else(|| {
+            LlmInferenceError::InvalidResponse("No JSON object end found".to_string())
+        })?;
+        let json_obj = &json_str[start..=end];
+        
+        let full_response: PlagiarismAudit = serde_json::from_str(json_obj).map_err(|e| {
+            LlmInferenceError::InvalidResponse(format!("JSON parse error: {}", e))
+        })?;
+        
+        Ok(full_response.audit)
     }
 }
 

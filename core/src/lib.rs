@@ -41,7 +41,7 @@ pub mod scoring_types;
 pub use error::{DataFabricationError, Result};
 
 #[cfg(feature = "std")]
-pub use llm_client::{LlmClient, MockLlmClient, WasmLlmClient};
+pub use llm_client::{LlmClient, MockLlmClient, WasmLlmClient, PlagiarismAudit, AuditDetails};
 
 #[cfg(feature = "http-client")]
 pub use llm_client::HttpLlmClient;
@@ -61,6 +61,7 @@ pub use ast_validation::{validate_python_code, SecurityViolation, Severity};
 #[cfg(feature = "std")]
 pub use ast_similarity::{
     normalize_ast, hash_structure, compare_structures, check_plagiarism,
+    get_most_similar_pair,
     SimilarityScore, ComparisonResult, PlagiarismStatus, NormalizedAst,
     StructureHash, PlagiarismReport, SubmissionCluster, SimilarityError,
 };

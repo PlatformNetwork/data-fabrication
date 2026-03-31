@@ -372,10 +372,10 @@ DatasetScore {
 ```
 SimilarityScore(u8)             // 0-100%
 
-PlagiarismStatus = Clean | Suspicious | Plagiarized
-// Clean: < 50%
-// Suspicious: 50-79%
-// Plagiarized: >= 80%
+PlagiarismStatus = Clean | NeedsLlmVerification | Plagiarized
+// Clean: < 30%
+// NeedsLlmVerification: 30-96%
+// Plagiarized: >= 97%
 
 ComparisonResult {
     score: SimilarityScore,
@@ -489,9 +489,9 @@ sequenceDiagram
 
 | Similarity Score | Status | Action |
 | --- | --- | --- |
-| 0-49% | Clean | Accept |
-| 50-79% | Suspicious | Flag for review |
-| 80-100% | Plagiarized | Reject or penalize |
+| 0-29% | Clean | Accept |
+| 30-96% | NeedsLlmVerification | Verify with LLM |
+| 97-100% | Plagiarized | Reject or penalize |
 
 ### Sandbox Isolation
 

@@ -1,6 +1,6 @@
 //! AST Similarity Detection Types and Normalizer
 //!
-//! Provides types and functions for detecting code plagiarism through 
+//! Provides types and functions for detecting code plagiarism through
 //! AST structural comparison.
 
 use crate::error::{DataFabricationError, Result};
@@ -21,7 +21,9 @@ pub enum SimilarityError {
 impl fmt::Display for SimilarityError {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
-            Self::InvalidScore { value } => write!(f, "Invalid similarity score: {}. Must be 0-100", value),
+            Self::InvalidScore { value } => {
+                write!(f, "Invalid similarity score: {}. Must be 0-100", value)
+            }
             Self::EmptySubmission => write!(f, "Cannot compare empty submission"),
             Self::ParseError { message } => write!(f, "Parse error: {}", message),
         }
@@ -36,15 +38,24 @@ pub struct SimilarityScore(pub u8);
 
 impl SimilarityScore {
     pub fn new(value: u8) -> std::result::Result<Self, SimilarityError> {
-        if value > 100 { Err(SimilarityError::InvalidScore { value }) }
-        else { Ok(Self(value)) }
+        if value > 100 {
+            Err(SimilarityError::InvalidScore { value })
+        } else {
+            Ok(Self(value))
+        }
     }
-    pub fn value(&self) -> u8 { self.0 }
-    pub fn as_f64(&self) -> f64 { self.0 as f64 / 100.0 }
+    pub fn value(&self) -> u8 {
+        self.0
+    }
+    pub fn as_f64(&self) -> f64 {
+        self.0 as f64 / 100.0
+    }
 }
 
 impl fmt::Display for SimilarityScore {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}%", self.0) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}%", self.0)
+    }
 }
 
 /// Result of comparing two submissions
@@ -57,23 +68,35 @@ pub struct ComparisonResult {
 
 impl ComparisonResult {
     pub fn new(score: SimilarityScore, a: usize, b: usize) -> Self {
-        Self { score, submission_a: a, submission_b: b }
+        Self {
+            score,
+            submission_a: a,
+            submission_b: b,
+        }
     }
 }
 
 /// Status of plagiarism detection
 #[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub enum PlagiarismStatus {
-    Clean,
-    Suspicious,
-    Plagiarized,
+    Clean,                // Score < 30%
+    NeedsLlmVerification, // 30% <= Score < 97%
+    Plagiarized,          // Score >= 97%
 }
 
 impl PlagiarismStatus {
     pub fn from_score(score: SimilarityScore) -> Self {
-        if score.0 >= 80 { Self::Plagiarized }
-        else if score.0 >= 50 { Self::Suspicious }
-        else { Self::Clean }
+        if score.0 >= 97 {
+            Self::Plagiarized
+        } else if score.0 >= 30 {
+            Self::NeedsLlmVerification
+        } else {
+            Self::Clean
+        }
+    }
+
+    pub fn needs_llm_verification(&self) -> bool {
+        matches!(self, Self::NeedsLlmVerification)
     }
 }
 
@@ -81,7 +104,7 @@ impl fmt::Display for PlagiarismStatus {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Clean => write!(f, "Clean"),
-            Self::Suspicious => write!(f, "Suspicious"),
+            Self::NeedsLlmVerification => write!(f, "NeedsLlmVerification"),
             Self::Plagiarized => write!(f, "Plagiarized"),
         }
     }
@@ -95,9 +118,17 @@ pub struct NormalizedAst {
 }
 
 impl NormalizedAst {
-    pub fn new(source: String) -> Self { Self { source, node_sequence: Vec::new() } }
+    pub fn new(source: String) -> Self {
+        Self {
+            source,
+            node_sequence: Vec::new(),
+        }
+    }
     pub fn with_nodes(source: String, nodes: Vec<String>) -> Self {
-        Self { source, node_sequence: nodes }
+        Self {
+            source,
+            node_sequence: nodes,
+        }
     }
 }
 
@@ -106,18 +137,23 @@ impl NormalizedAst {
 pub struct StructureHash(pub [u8; 32]);
 
 impl StructureHash {
-    pub fn new(bytes: [u8; 32]) -> Self { Self(bytes) }
-    pub fn as_hex(&self) -> String { self.0.iter().map(|b| format!("{:02x}", b)).collect() }
+    pub fn new(bytes: [u8; 32]) -> Self {
+        Self(bytes)
+    }
+    pub fn as_hex(&self) -> String {
+        self.0.iter().map(|b| format!("{:02x}", b)).collect()
+    }
     pub fn prefix_u64(&self) -> u64 {
         u64::from_be_bytes([
-            self.0[0], self.0[1], self.0[2], self.0[3],
-            self.0[4], self.0[5], self.0[6], self.0[7],
+            self.0[0], self.0[1], self.0[2], self.0[3], self.0[4], self.0[5], self.0[6], self.0[7],
         ])
     }
 }
 
 impl fmt::Display for StructureHash {
-    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result { write!(f, "{}", self.as_hex()) }
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
+        write!(f, "{}", self.as_hex())
+    }
 }
 
 /// Report from plagiarism detection
@@ -125,8 +161,15 @@ impl fmt::Display for StructureHash {
 pub enum PlagiarismReport {
     NoSubmissions,
     InsufficientData,
-    Results { comparisons: Vec<ComparisonResult>, suspicious: Vec<usize>, plagiarized: Vec<usize> },
-    ParseError { submission_index: usize, message: String },
+    Results {
+        comparisons: Vec<ComparisonResult>,
+        suspicious: Vec<usize>,
+        plagiarized: Vec<usize>,
+    },
+    ParseError {
+        submission_index: usize,
+        message: String,
+    },
 }
 
 impl fmt::Display for PlagiarismReport {
@@ -134,11 +177,23 @@ impl fmt::Display for PlagiarismReport {
         match self {
             Self::NoSubmissions => write!(f, "No submissions"),
             Self::InsufficientData => write!(f, "Insufficient data"),
-            Self::Results { comparisons, suspicious, plagiarized } => {
-                write!(f, "{} comparisons, {} suspicious, {} plagiarized", 
-                    comparisons.len(), suspicious.len(), plagiarized.len())
+            Self::Results {
+                comparisons,
+                suspicious,
+                plagiarized,
+            } => {
+                write!(
+                    f,
+                    "{} comparisons, {} suspicious, {} plagiarized",
+                    comparisons.len(),
+                    suspicious.len(),
+                    plagiarized.len()
+                )
             }
-            Self::ParseError { submission_index, message } => {
+            Self::ParseError {
+                submission_index,
+                message,
+            } => {
                 write!(f, "Parse error #{}: {}", submission_index, message)
             }
         }
@@ -152,31 +207,42 @@ pub struct SubmissionCluster {
     pub submission_indices: Vec<usize>,
 }
 
+/// Get the submission pair with the highest similarity score
+pub fn get_most_similar_pair(
+    comparisons: &[ComparisonResult],
+) -> Option<(usize, usize, SimilarityScore)> {
+    comparisons
+        .iter()
+        .max_by_key(|c| c.score)
+        .map(|c| (c.submission_a, c.submission_b, c.score))
+}
+
 // ============================================================================
 // AST NORMALIZER
 // ============================================================================
 
 const BUILTINS: &[&str] = &[
-    "print", "len", "range", "str", "int", "float", "list", "dict", "set", "tuple",
-    "bool", "None", "True", "False", "if", "else", "elif", "for", "while", "def",
-    "class", "return", "yield", "import", "from", "as", "try", "except", "finally",
-    "with", "lambda", "and", "or", "not", "in", "is", "assert", "raise", "break",
-    "continue", "pass", "global", "nonlocal", "del",
+    "print", "len", "range", "str", "int", "float", "list", "dict", "set", "tuple", "bool", "None",
+    "True", "False", "if", "else", "elif", "for", "while", "def", "class", "return", "yield",
+    "import", "from", "as", "try", "except", "finally", "with", "lambda", "and", "or", "not", "in",
+    "is", "assert", "raise", "break", "continue", "pass", "global", "nonlocal", "del",
 ];
 
 /// Normalize Python source code for similarity comparison
 pub fn normalize_ast(source: &str) -> Result<NormalizedAst> {
-    let ast = Suite::parse(source, "<similarity>").map_err(|e| {
-        DataFabricationError::SchemaError {
+    let ast =
+        Suite::parse(source, "<similarity>").map_err(|e| DataFabricationError::SchemaError {
             message: format!("Failed to parse Python: {}", e),
             line: None,
-        }
-    })?;
+        })?;
 
     let mut normalizer = AstNormalizer::new();
     normalizer.walk_statements(&ast);
-    
-    Ok(NormalizedAst::with_nodes(source.to_string(), normalizer.node_sequence))
+
+    Ok(NormalizedAst::with_nodes(
+        source.to_string(),
+        normalizer.node_sequence,
+    ))
 }
 
 /// Compute the structure hash of a normalized AST
@@ -201,14 +267,19 @@ struct AstNormalizer {
 
 impl AstNormalizer {
     fn new() -> Self {
-        Self { var_counter: 0, var_map: HashMap::new(), node_sequence: Vec::new() }
+        Self {
+            var_counter: 0,
+            var_map: HashMap::new(),
+            node_sequence: Vec::new(),
+        }
     }
 
     fn normalize_var(&mut self, name: &str) -> String {
         if is_builtin(name) || name.starts_with('_') {
             return name.to_string();
         }
-        self.var_map.entry(name.to_string())
+        self.var_map
+            .entry(name.to_string())
             .or_insert_with(|| {
                 let normalized = format!("var_{}", self.var_counter);
                 self.var_counter += 1;
@@ -227,24 +298,31 @@ impl AstNormalizer {
         match stmt {
             Stmt::FunctionDef(f) => {
                 self.node_sequence.push("FunctionDef".to_string());
-                let name = self.normalize_var(f.name.as_str()); self.node_sequence.push(name);
+                let name = self.normalize_var(f.name.as_str());
+                self.node_sequence.push(name);
                 for arg in &f.args.args {
-                    let name = self.normalize_var(arg.def.arg.as_str()); self.node_sequence.push(name);
+                    let name = self.normalize_var(arg.def.arg.as_str());
+                    self.node_sequence.push(name);
                 }
                 self.walk_statements(&f.body);
             }
             Stmt::ClassDef(c) => {
                 self.node_sequence.push("ClassDef".to_string());
-                let name = self.normalize_var(c.name.as_str()); self.node_sequence.push(name);
+                let name = self.normalize_var(c.name.as_str());
+                self.node_sequence.push(name);
                 self.walk_statements(&c.body);
             }
             Stmt::Return(r) => {
                 self.node_sequence.push("Return".to_string());
-                if let Some(e) = &r.value { self.walk_expr(e); }
+                if let Some(e) = &r.value {
+                    self.walk_expr(e);
+                }
             }
             Stmt::Assign(a) => {
                 self.node_sequence.push("Assign".to_string());
-                for target in &a.targets { self.walk_expr(target); }
+                for target in &a.targets {
+                    self.walk_expr(target);
+                }
                 self.walk_expr(&a.value);
             }
             Stmt::AugAssign(a) => {
@@ -304,7 +382,9 @@ impl AstNormalizer {
                 self.node_sequence.push("With".to_string());
                 for item in &w.items {
                     self.walk_expr(&item.context_expr);
-                    if let Some(o) = &item.optional_vars { self.walk_expr(o); }
+                    if let Some(o) = &item.optional_vars {
+                        self.walk_expr(o);
+                    }
                 }
                 self.walk_statements(&w.body);
             }
@@ -326,8 +406,12 @@ impl AstNormalizer {
             Expr::Call(c) => {
                 self.node_sequence.push("Call".to_string());
                 self.walk_expr(&c.func);
-                for arg in &c.args { self.walk_expr(arg); }
-                for kw in &c.keywords { self.walk_expr(&kw.value); }
+                for arg in &c.args {
+                    self.walk_expr(arg);
+                }
+                for kw in &c.keywords {
+                    self.walk_expr(&kw.value);
+                }
             }
             Expr::Attribute(a) => {
                 self.node_sequence.push("Attribute".to_string());
@@ -346,22 +430,30 @@ impl AstNormalizer {
             Expr::Compare(c) => {
                 self.node_sequence.push("Compare".to_string());
                 self.walk_expr(&c.left);
-                for comp in &c.comparators { self.walk_expr(comp); }
+                for comp in &c.comparators {
+                    self.walk_expr(comp);
+                }
             }
             Expr::List(l) => {
                 self.node_sequence.push("List".to_string());
-                for e in &l.elts { self.walk_expr(e); }
+                for e in &l.elts {
+                    self.walk_expr(e);
+                }
             }
             Expr::Dict(d) => {
                 self.node_sequence.push("Dict".to_string());
                 for (k, v) in d.keys.iter().zip(d.values.iter()) {
-                    if let Some(k) = k { self.walk_expr(k); }
+                    if let Some(k) = k {
+                        self.walk_expr(k);
+                    }
                     self.walk_expr(v);
                 }
             }
             Expr::Tuple(t) => {
                 self.node_sequence.push("Tuple".to_string());
-                for e in &t.elts { self.walk_expr(e); }
+                for e in &t.elts {
+                    self.walk_expr(e);
+                }
             }
             Expr::Subscript(s) => {
                 self.node_sequence.push("Subscript".to_string());
@@ -410,7 +502,7 @@ pub fn compare_structures(a: &NormalizedAst, b: &NormalizedAst) -> SimilaritySco
 
     let lcs_len = lcs_length(&a.node_sequence, &b.node_sequence);
     let max_len = a.node_sequence.len().max(b.node_sequence.len());
-    
+
     let score = (lcs_len as f64 / max_len as f64 * 100.0) as u8;
     SimilarityScore(score.min(100))
 }
@@ -437,16 +529,20 @@ fn lcs_length(a: &[String], b: &[String]) -> usize {
 /// Cluster submissions by their structure hash prefix
 pub fn cluster_by_hash(submissions: &[NormalizedAst]) -> Vec<SubmissionCluster> {
     let mut hash_map: HashMap<u64, Vec<usize>> = HashMap::new();
-    
+
     for (i, sub) in submissions.iter().enumerate() {
         let hash = hash_structure(sub);
         let prefix = hash.prefix_u64();
         hash_map.entry(prefix).or_default().push(i);
     }
 
-    hash_map.into_iter()
+    hash_map
+        .into_iter()
         .filter(|(_, indices)| indices.len() >= 2)
-        .map(|(prefix, indices)| SubmissionCluster { hash_prefix: prefix, submission_indices: indices })
+        .map(|(prefix, indices)| SubmissionCluster {
+            hash_prefix: prefix,
+            submission_indices: indices,
+        })
         .collect()
 }
 
@@ -463,10 +559,12 @@ pub fn check_plagiarism(sources: &[&str]) -> Result<PlagiarismReport> {
     for (i, source) in sources.iter().enumerate() {
         match normalize_ast(source) {
             Ok(ast) => normalized.push(ast),
-            Err(e) => return Ok(PlagiarismReport::ParseError {
-                submission_index: i,
-                message: e.to_string(),
-            }),
+            Err(e) => {
+                return Ok(PlagiarismReport::ParseError {
+                    submission_index: i,
+                    message: e.to_string(),
+                })
+            }
         }
     }
 
@@ -481,19 +579,31 @@ pub fn check_plagiarism(sources: &[&str]) -> Result<PlagiarismReport> {
 
             match PlagiarismStatus::from_score(score) {
                 PlagiarismStatus::Plagiarized => {
-                    if !plagiarized.contains(&i) { plagiarized.push(i); }
-                    if !plagiarized.contains(&j) { plagiarized.push(j); }
+                    if !plagiarized.contains(&i) {
+                        plagiarized.push(i);
+                    }
+                    if !plagiarized.contains(&j) {
+                        plagiarized.push(j);
+                    }
                 }
-                PlagiarismStatus::Suspicious => {
-                    if !suspicious.contains(&i) { suspicious.push(i); }
-                    if !suspicious.contains(&j) { suspicious.push(j); }
+                PlagiarismStatus::NeedsLlmVerification => {
+                    if !suspicious.contains(&i) {
+                        suspicious.push(i);
+                    }
+                    if !suspicious.contains(&j) {
+                        suspicious.push(j);
+                    }
                 }
                 _ => {}
             }
         }
     }
 
-    Ok(PlagiarismReport::Results { comparisons, suspicious, plagiarized })
+    Ok(PlagiarismReport::Results {
+        comparisons,
+        suspicious,
+        plagiarized,
+    })
 }
 
 #[cfg(test)]
@@ -508,9 +618,62 @@ mod tests {
 
     #[test]
     fn test_plagiarism_status() {
-        assert_eq!(PlagiarismStatus::from_score(SimilarityScore::new(90).unwrap()), PlagiarismStatus::Plagiarized);
-        assert_eq!(PlagiarismStatus::from_score(SimilarityScore::new(60).unwrap()), PlagiarismStatus::Suspicious);
-        assert_eq!(PlagiarismStatus::from_score(SimilarityScore::new(30).unwrap()), PlagiarismStatus::Clean);
+        assert_eq!(
+            PlagiarismStatus::from_score(SimilarityScore::new(97).unwrap()),
+            PlagiarismStatus::Plagiarized
+        );
+        assert_eq!(
+            PlagiarismStatus::from_score(SimilarityScore::new(99).unwrap()),
+            PlagiarismStatus::Plagiarized
+        );
+
+        assert_eq!(
+            PlagiarismStatus::from_score(SimilarityScore::new(96).unwrap()),
+            PlagiarismStatus::NeedsLlmVerification
+        );
+        assert_eq!(
+            PlagiarismStatus::from_score(SimilarityScore::new(50).unwrap()),
+            PlagiarismStatus::NeedsLlmVerification
+        );
+        assert_eq!(
+            PlagiarismStatus::from_score(SimilarityScore::new(30).unwrap()),
+            PlagiarismStatus::NeedsLlmVerification
+        );
+
+        assert_eq!(
+            PlagiarismStatus::from_score(SimilarityScore::new(29).unwrap()),
+            PlagiarismStatus::Clean
+        );
+        assert_eq!(
+            PlagiarismStatus::from_score(SimilarityScore::new(0).unwrap()),
+            PlagiarismStatus::Clean
+        );
+    }
+
+    #[test]
+    fn test_needs_llm_verification() {
+        assert!(PlagiarismStatus::NeedsLlmVerification.needs_llm_verification());
+        assert!(!PlagiarismStatus::Clean.needs_llm_verification());
+        assert!(!PlagiarismStatus::Plagiarized.needs_llm_verification());
+    }
+
+    #[test]
+    fn test_get_most_similar_pair_returns_highest() {
+        let comparisons = vec![
+            ComparisonResult::new(SimilarityScore::new(50).unwrap(), 0, 1),
+            ComparisonResult::new(SimilarityScore::new(85).unwrap(), 1, 2),
+            ComparisonResult::new(SimilarityScore::new(30).unwrap(), 0, 2),
+        ];
+
+        let (a, b, score) = get_most_similar_pair(&comparisons).unwrap();
+        assert_eq!((a, b), (1, 2));
+        assert_eq!(score.value(), 85);
+    }
+
+    #[test]
+    fn test_get_most_similar_pair_empty_returns_none() {
+        let empty: Vec<ComparisonResult> = vec![];
+        assert!(get_most_similar_pair(&empty).is_none());
     }
 
     #[test]
@@ -526,10 +689,10 @@ mod tests {
     fn test_normalize_variables() {
         let code1 = "x = 1\ny = x + 2";
         let code2 = "a = 1\nb = a + 2";
-        
+
         let ast1 = normalize_ast(code1).unwrap();
         let ast2 = normalize_ast(code2).unwrap();
-        
+
         assert_eq!(ast1.node_sequence, ast2.node_sequence);
     }
 
@@ -538,7 +701,7 @@ mod tests {
         let code = "def foo(): return 42";
         let ast1 = normalize_ast(code).unwrap();
         let ast2 = normalize_ast(code).unwrap();
-        
+
         assert_eq!(hash_structure(&ast1), hash_structure(&ast2));
     }
 
@@ -560,20 +723,31 @@ mod tests {
 
     #[test]
     fn test_check_plagiarism_empty() {
-        assert!(matches!(check_plagiarism(&[]).unwrap(), PlagiarismReport::NoSubmissions));
+        assert!(matches!(
+            check_plagiarism(&[]).unwrap(),
+            PlagiarismReport::NoSubmissions
+        ));
     }
 
     #[test]
     fn test_check_plagiarism_single() {
-        assert!(matches!(check_plagiarism(&["x = 1"]).unwrap(), PlagiarismReport::InsufficientData));
+        assert!(matches!(
+            check_plagiarism(&["x = 1"]).unwrap(),
+            PlagiarismReport::InsufficientData
+        ));
     }
 
     #[test]
     fn test_check_plagiarism_identical() {
         let code = "x = 1\ny = 2";
         let report = check_plagiarism(&[code, code]).unwrap();
-        
-        if let PlagiarismReport::Results { comparisons, plagiarized, .. } = report {
+
+        if let PlagiarismReport::Results {
+            comparisons,
+            plagiarized,
+            ..
+        } = report
+        {
             assert_eq!(comparisons.len(), 1);
             assert_eq!(comparisons[0].score.value(), 100);
             assert_eq!(plagiarized.len(), 2);

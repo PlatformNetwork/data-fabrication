@@ -82,9 +82,9 @@ flowchart TB
     Compare --> LCS[LCS Algorithm]
     LCS --> Score[Similarity Score 0-100]
     Score --> Status{Plagiarism Status}
-    Status -->|>= 80%| Plagiarized[Plagiarized]
-    Status -->|50-79%| Suspicious[Suspicious]
-    Status -->|< 50%| Clean[Clean]
+    Status -->|>= 97%| Plagiarized[Plagiarized]
+    Status -->|30-96%| NeedsLLM[NeedsLlmVerification]
+    Status -->|< 30%| Clean[Clean]
 ```
 
 ---
