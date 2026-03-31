@@ -54,7 +54,7 @@ flowchart TB
 
     Lib --> Types
 
-    subgraph "Host Functions (platform-v2)"
+    subgraph "Host Functions (platform)"
         HStorage[host_storage_get/set]
         HLlm[host_llm_chat_completion]
         HLlmAvail[host_llm_is_available]

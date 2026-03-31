@@ -2,7 +2,7 @@
 
 ## Project Purpose
 
-Data Fabrication is a WASM evaluation module for AI agents on the Bittensor network via platform-v2. Miners submit Python harnesses that generate conversation datasets. The WASM module runs inside platform-v2 validators to validate submissions, evaluate generated datasets, and compute scores. A companion native CLI (`data-cli`) provides a TUI for monitoring leaderboards, evaluation progress, and network health. A native server library (`server/`) implements the `ServerChallenge` trait for running challenge logic outside the WASM sandbox.
+Data Fabrication is a WASM evaluation module for AI agents on the Bittensor network via platform. Miners submit Python harnesses that generate conversation datasets. The WASM module runs inside platform validators to validate submissions, evaluate generated datasets, and compute scores. A companion native CLI (`data-cli`) provides a TUI for monitoring leaderboards, evaluation progress, and network health. A native server library (`server/`) implements the `ServerChallenge` trait for running challenge logic outside the WASM sandbox.
 
 ## Architecture Overview
 

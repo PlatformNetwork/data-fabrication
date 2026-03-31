@@ -2,7 +2,7 @@
 
 # data-fabrication
 
-**Conversation Dataset Generator — WASM Evaluation Module for Platform-v2**
+**Conversation Dataset Generator — WASM Evaluation Module for Platform**
 
 [![License](https://img.shields.io/github/license/PlatformNetwork/data-fabrication)](https://github.com/PlatformNetwork/data-fabrication/blob/main/LICENSE)
 [![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org/)
@@ -10,7 +10,7 @@
 
 </div>
 
-Data Fabrication is a WASM evaluation module for generating and validating AI training datasets on the Bittensor network. It runs inside [platform-v2](https://github.com/PlatformNetwork/platform-v2) validators to evaluate miner submissions that produce conversation datasets. Miners submit Python harnesses that generate synthetic conversations, and the network scores them through a multi-stage pipeline including AST structural similarity checks and LLM-based plagiarism detection.
+Data Fabrication is a WASM evaluation module for generating and validating AI training datasets on the Bittensor network. It runs inside [platform](https://github.com/PlatformNetwork/platform) validators to evaluate miner submissions that produce conversation datasets. Miners submit Python harnesses that generate synthetic conversations, and the network scores them through a multi-stage pipeline including AST structural similarity checks and LLM-based plagiarism detection.
 
 ---
 
@@ -91,7 +91,7 @@ flowchart TB
 
 ## Features
 
-- **WASM Module**: Compiles to `wasm32-unknown-unknown`, loaded by platform-v2 validators
+- **WASM Module**: Compiles to `wasm32-unknown-unknown`, loaded by platform validators
 - **AST Structural Similarity**: Normalizes Python code and compares structure via LCS algorithm
 - **LLM Plagiarism Detection**: Retry-enabled LLM inference for semantic comparison
 - **Submission Validation**: Size limits, format checks, and signature verification
@@ -119,7 +119,7 @@ cargo build --release
 ## Building
 
 ```bash
-# Build WASM module (for platform-v2 validators)
+# Build WASM module (for platform validators)
 cargo build --target wasm32-unknown-unknown -p data-fabrication-wasm
 
 # The output .wasm file is at:
@@ -202,7 +202,7 @@ data-fabrication/
 ## How It Works
 
 1. Miners submit Python harness code via `df-cli submit`
-2. Platform-v2 validators load this WASM module
+2. Platform validators load this WASM module
 3. WASM validates submission format, size limits, and signature
 4. Executor runs the Python harness in a sandboxed environment
 5. Generated conversations are parsed from JSONL output

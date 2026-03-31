@@ -11,8 +11,8 @@ license = "Apache-2.0"
 repository = "https://github.com/PlatformNetwork/data-fabrication"
 
 [workspace.dependencies]
-platform-challenge-sdk = { git = "https://github.com/PlatformNetwork/platform-v2", rev = "8dd66cdd", features = ["http-server"] }
-platform-core = { git = "https://github.com/PlatformNetwork/platform-v2", rev = "8dd66cdd" }
+platform-challenge-sdk = { git = "https://github.com/PlatformNetwork/platform", branch = "main", features = ["http-server"] }
+platform-core = { git = "https://github.com/PlatformNetwork/platform", branch = "main" }
 bincode = "1.3"
 serde = { version = "1.0", features = ["derive"] }
 sled = "0.34"
