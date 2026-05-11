@@ -284,7 +284,13 @@ async def _submission_from_request(
 ) -> tuple[SubmissionCreate, bytes | None, str | None]:
     content_type = request.headers.get("content-type", "").lower()
     if "application/json" in content_type:
-        payload = SubmissionCreate.model_validate(await request.json())
+        body = await request.json()
+        if any(key in body for key in ("dataset_jsonl", "code", "harness_code")):
+            raise HTTPException(
+                status_code=400,
+                detail="submit only accepts ZIP harness packages, not direct datasets or code",
+            )
+        payload = SubmissionCreate.model_validate(body)
         return payload, None, payload.filename
     hotkey = _request_hotkey(request)
     filename = request.headers.get("x-submission-filename") or "submission.zip"

@@ -2,7 +2,7 @@
 
 ## Project Purpose
 
-Data Fabrication is a Python Platform SDK challenge service. Miners submit Python harnesses or direct JSONL conversation datasets, the service evaluates dataset quality/originality, stores results in SQLite, and exposes Platform-compatible weights.
+Data Fabrication is a Python Platform SDK challenge service. Miners submit ZIP packages containing the full Python harness code; the service executes the harness, evaluates the generated agentic coding dataset, stores results in SQLite, and exposes Platform-compatible weights.
 
 ## Architecture
 
@@ -15,7 +15,7 @@ data-fabrication/
 │   ├── repository.py          # Persistence and leaderboard queries
 │   ├── routes.py              # Public Platform proxy routes
 │   ├── weights.py             # Weight computation
-│   ├── evaluator/             # JSONL parsing, scoring, AST checks, execution
+│   ├── evaluator/             # ZIP artifacts, JSONL parsing, scoring, AST checks, execution
 │   └── sdk/                   # Vendored Platform-compatible helpers
 ├── tests/
 ├── pyproject.toml
@@ -38,5 +38,6 @@ python -m compileall src
 - Keep the runtime Python 3.12+ compatible.
 - Prefer Platform-compatible routes: `/health`, `/version`, `/internal/v1/get_weights`.
 - Use the vendored Docker executor for untrusted harness execution in production.
+- `/submit` must accept ZIP harness packages only, never direct datasets or loose code.
 - Direct subprocess execution is for local development/tests only and must remain opt-in.
 - Never log shared tokens, miner secrets, or raw bearer headers.

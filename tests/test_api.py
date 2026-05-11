@@ -143,6 +143,20 @@ def test_internal_bridge_accepts_raw_zip(tmp_path: Path) -> None:
         assert detail.json()["status"] == "completed"
 
 
+def test_submit_rejects_direct_dataset_payload(tmp_path: Path) -> None:
+    app = create_app(_settings(tmp_path))
+    with TestClient(app) as client:
+        response = client.post(
+            "/submit",
+            json={
+                "hotkey": "5Abc",
+                "dataset_jsonl": '{"messages":[{"role":"user","content":"no zip"}]}',
+            },
+        )
+        assert response.status_code == 400
+        assert "ZIP harness packages" in response.json()["detail"]
+
+
 def test_internal_auth_rejects_bad_token(tmp_path: Path) -> None:
     app = create_app(_settings(tmp_path))
     with TestClient(app) as client:

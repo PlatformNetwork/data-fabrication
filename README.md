@@ -13,7 +13,7 @@
 
 </div>
 
-Data Fabrication is a Python challenge service for the Platform network. Miners submit Python harnesses or direct JSONL conversation datasets, the service validates and scores the generated conversations, detects structural plagiarism signals, stores results in SQLite, and exposes Platform-compatible weights.
+Data Fabrication is a Python challenge service for the Platform network. Miners submit ZIP packages containing the full Python harness code; the service executes each harness, validates and scores the generated agentic coding dataset, detects structural plagiarism signals, stores results in SQLite, and exposes Platform-compatible weights.
 
 ---
 
@@ -41,7 +41,7 @@ DATA_FABRICATION_DATABASE_URL=sqlite+aiosqlite:///./data-fabrication.sqlite3 \
 
 ```mermaid
 flowchart LR
-    Miner[Miner] -->|Harness or JSONL| API[FastAPI]
+    Miner[Miner] -->|ZIP harness package| API[FastAPI]
     API --> DB[(SQLite)]
     API --> SDK[Platform SDK]
     SDK --> Docker[Docker Executor]
@@ -65,8 +65,8 @@ sequenceDiagram
     participant P as Platform
 
     M->>A: POST /submit
-    A->>D: Store submission
-    A->>E: Validate Python AST
+    A->>D: Store ZIP artifact
+    A->>E: Extract and statically review harness
     E->>X: Run harness when Docker is enabled
     X-->>E: JSONL conversations
     E->>E: Parse, score, detect repetition
@@ -99,8 +99,9 @@ flowchart TB
 - **Python Platform Challenge**: FastAPI service compatible with Platform proxy and master collection.
 - **Platform SDK Routes**: `/health`, `/version`, and `/internal/v1/get_weights`.
 - **Secure Execution Path**: Vendored Platform Docker executor with CLI and broker backends.
-- **Conversation JSONL Validation**: Enforces message schema, role flow, and minimum turns.
-- **Quality Scoring**: Combines format, semantic-shape heuristics, diversity, and originality.
+- **ZIP Harness Contract**: `/submit` accepts complete ZIP packages only, not direct datasets or loose code.
+- **Agentic JSONL Validation**: Enforces task, tools, tool calls, reasoning, final answers, role flow, and minimum turns.
+- **Quality-Dominant Scoring**: Combines dataset quality, agentic behavior, function calls, reasoning, verifiability, diversity, and originality.
 - **AST Safety Checks**: Blocks critical Python calls such as `exec`, `eval`, `__import__`, and `os.system`.
 - **AST Similarity**: Normalizes variable names and compares structure with LCS scoring.
 - **SQLite Persistence**: Stores submissions, metrics, logs, errors, and leaderboard state.
@@ -120,26 +121,16 @@ python -m pip install -e ".[dev]"
 
 ## Usage
 
-Submit direct JSONL:
+Submit a complete ZIP harness package:
 
 ```bash
+zip -r submission.zip harness.py pyproject.toml src/
 curl -X POST http://localhost:8080/submit \
   -H "content-type: application/json" \
   -d '{
     "hotkey": "5Abc...",
-    "dataset_jsonl": "{\"messages\":[{\"role\":\"user\",\"content\":\"Explain gravity.\"},{\"role\":\"assistant\",\"content\":\"Gravity is the attraction between masses.\"}]}"
-  }'
-```
-
-Submit a Python harness:
-
-```bash
-curl -X POST http://localhost:8080/submit \
-  -H "content-type: application/json" \
-  -d '{
-    "hotkey": "5Abc...",
-    "filename": "harness.py",
-    "code": "import json\nprint(json.dumps({\"messages\":[{\"role\":\"user\",\"content\":\"Give a detailed math prompt.\"},{\"role\":\"assistant\",\"content\":\"Here is a detailed synthetic answer with enough content for scoring.\"}]}))"
+    "filename": "submission.zip",
+    "package_base64": "'"$(base64 -w0 submission.zip)"'"
   }'
 ```
 
@@ -192,12 +183,15 @@ data-fabrication/
 │   ├── routes.py               # Public Platform routes
 │   ├── weights.py              # Platform weight computation
 │   ├── evaluator/
+│   │   ├── artifacts.py        # ZIP validation and safe extraction
 │   │   ├── ast_similarity.py   # AST normalization, hashing, LCS comparison
 │   │   ├── ast_validation.py   # Python safety checks
 │   │   ├── dataset.py          # JSONL parsing and schema validation
 │   │   ├── execution.py        # Harness execution and evaluation orchestration
+│   │   ├── judge.py            # Tool-assisted dataset judge
 │   │   ├── llm.py              # Optional LLM plagiarism audit client
-│   │   └── scoring.py          # Dataset scoring
+│   │   ├── scoring.py          # Dataset scoring
+│   │   └── static_review.py    # Static harness review
 │   └── sdk/                    # Platform-compatible app/auth/Docker helpers
 ├── tests/                      # Unit and API tests
 ├── config.example.yaml
@@ -209,13 +203,13 @@ data-fabrication/
 
 ## How It Works
 
-1. Miners submit a Python harness or a JSONL dataset.
-2. The service validates size, hotkey, and payload shape.
-3. Python harnesses are AST-checked before execution.
+1. Miners submit a ZIP package with all code needed by the Python harness.
+2. The service rejects direct datasets, loose Python code, unsafe paths, symlinks, and invalid archive layouts.
+3. Extracted harness files are statically reviewed before execution.
 4. Production execution uses the Platform Docker executor or broker.
-5. Harness output is parsed as conversation JSONL.
-6. The evaluator scores format, content quality, diversity, and originality.
-7. AST similarity utilities detect copy-style harness submissions.
+5. Harness output is parsed as agentic coding conversation JSONL.
+6. The evaluator scores quality, tool use, reasoning, verifiability, diversity, and originality.
+7. AST and optional LLM similarity checks detect copy-style harness submissions.
 8. SQLite stores the full evaluation record.
 9. Platform reads `/internal/v1/get_weights` and receives best score per hotkey.
 
@@ -226,10 +220,10 @@ data-fabrication/
 Final score:
 
 ```text
-score = format * 0.2 + quality * 0.4 + originality * 0.4
+score = weighted_quality + weighted_agentic_signals + weighted_originality
 ```
 
-Datasets pass when the final score is at least `0.5`. Scores are already normalized to `[0, 1]`, so Platform weights can directly use each miner’s best completed score.
+Dataset quality is dominant, with additional weight for agentic tool use, reasoning, coding relevance, verifiability, diversity, and originality. Scores are normalized to `[0, 1]`, so Platform weights can directly use each miner’s best completed score.
 
 ---
 

@@ -49,7 +49,7 @@ def create_challenge_app(
             "get_weights",
             "proxy_routes",
             "sqlite",
-            "dataset_jsonl",
+            "zip_harness",
             "ast_similarity",
             "plagiarism_detection",
         ]

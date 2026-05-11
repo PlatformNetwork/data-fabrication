@@ -29,8 +29,6 @@ class Database:
                 code_hash TEXT NOT NULL,
                 artifact_hash TEXT,
                 filename TEXT,
-                harness_code TEXT,
-                dataset_jsonl TEXT,
                 artifact_json TEXT NOT NULL DEFAULT '{}',
                 static_review_json TEXT NOT NULL DEFAULT '{}',
                 judge_json TEXT NOT NULL DEFAULT '{}',
