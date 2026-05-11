@@ -2,29 +2,37 @@
 
 # data-fabrication
 
-**Conversation Dataset Generator — WASM Evaluation Module for Platform**
+**Conversation Dataset Generator — Python Platform SDK Challenge Service**
 
 [![License](https://img.shields.io/github/license/PlatformNetwork/data-fabrication)](https://github.com/PlatformNetwork/data-fabrication/blob/main/LICENSE)
-[![Rust](https://img.shields.io/badge/rust-1.70+-orange.svg)](https://www.rust-lang.org/)
-[![WASM](https://img.shields.io/badge/wasm32-unknown--unknown-compatible-blue)](https://webassembly.org/)
+[![Python](https://img.shields.io/badge/python-3.12+-3776AB.svg)](https://www.python.org/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-challenge-009688.svg)](https://fastapi.tiangolo.com/)
+[![Platform SDK](https://img.shields.io/badge/Platform-SDK-black)](https://github.com/PlatformNetwork/platform)
+
+![Data Fabrication Banner](https://github.com/PlatformNetwork/bounty-challenge/raw/main/assets/banner.jpg)
 
 </div>
 
-Data Fabrication is a WASM evaluation module for generating and validating AI training datasets on the Bittensor network. It runs inside [platform](https://github.com/PlatformNetwork/platform) validators to evaluate miner submissions that produce conversation datasets. Miners submit Python harnesses that generate synthetic conversations, and the network scores them through a multi-stage pipeline including AST structural similarity checks and LLM-based plagiarism detection.
+Data Fabrication is a Python challenge service for the Platform network. Miners submit Python harnesses or direct JSONL conversation datasets, the service validates and scores the generated conversations, detects structural plagiarism signals, stores results in SQLite, and exposes Platform-compatible weights.
 
 ---
 
 ## TL;DR
 
 ```bash
-# Build WASM module
-cargo build --target wasm32-unknown-unknown -p data-fabrication-wasm
+git clone https://github.com/PlatformNetwork/data-fabrication
+cd data-fabrication
+python -m venv .venv
+.venv/bin/python -m pip install -e ".[dev]"
+.venv/bin/pytest
+```
 
-# Build CLI tool
-cargo build --release -p df-cli
+Run locally:
 
-# Run the TUI monitor
-df-cli monitor
+```bash
+DATA_FABRICATION_SHARED_TOKEN=dev-secret \
+DATA_FABRICATION_DATABASE_URL=sqlite+aiosqlite:///./data-fabrication.sqlite3 \
+.venv/bin/uvicorn data_fabrication.app:app --host 0.0.0.0 --port 8080
 ```
 
 ---
@@ -33,15 +41,14 @@ df-cli monitor
 
 ```mermaid
 flowchart LR
-    Miner[Miner] -->|Submit Python Harness| RPC[Validator RPC]
-    RPC --> Validators[Validator Network]
-    Validators --> WASM[data-fabrication WASM]
-    WASM --> Storage[(Blockchain Storage)]
-    Validators --> Executor[df-executor]
-    Executor -->|Dataset Results| Validators
-    Validators -->|Scores + Weights| BT[Bittensor Chain]
-    CLI[df-cli TUI] -->|JSON-RPC| RPC
-    CLI -->|Display| Monitor[Progress / Logs / Leaderboard]
+    Miner[Miner] -->|Harness or JSONL| API[FastAPI]
+    API --> DB[(SQLite)]
+    API --> SDK[Platform SDK]
+    SDK --> Docker[Docker Executor]
+    Docker --> Harness[Python Harness]
+    Harness --> Dataset[JSONL Dataset]
+    Dataset --> Score[Quality Scoring]
+    Score --> Weights[Platform Weights]
 ```
 
 ---
@@ -51,22 +58,21 @@ flowchart LR
 ```mermaid
 sequenceDiagram
     participant M as Miner
-    participant V as Validators
-    participant W as WASM Module
-    participant E as df-executor
-    participant BT as Bittensor
+    participant A as API
+    participant D as DB
+    participant E as Evaluator
+    participant X as Docker
+    participant P as Platform
 
-    M->>V: Submit Python harness (JSON)
-    V->>W: Store code, validate format
-    W-->>V: Validation pass/fail
-    V->>W: Run AST similarity check
-    W-->>V: Similarity score
-    V->>E: Execute harness, generate dataset
-    E-->>V: Generated conversations
-    V->>W: LLM plagiarism evaluation
-    W-->>V: Plagiarism verdict
-    V->>W: Compute final score
-    V->>BT: Submit weights at epoch boundary
+    M->>A: POST /submit
+    A->>D: Store submission
+    A->>E: Validate Python AST
+    E->>X: Run harness when Docker is enabled
+    X-->>E: JSONL conversations
+    E->>E: Parse, score, detect repetition
+    E->>D: Persist score and logs
+    P->>A: GET /internal/v1/get_weights
+    A-->>P: hotkey => score
 ```
 
 ---
@@ -76,176 +82,154 @@ sequenceDiagram
 ```mermaid
 flowchart TB
     Code[Python Harness] --> Parse[Parse AST]
-    Parse --> Normalize[Normalize Variables]
+    Parse --> Normalize[Normalize Names]
     Normalize --> Hash[Structure Hash]
-    Hash --> Compare[Compare with Others]
-    Compare --> LCS[LCS Algorithm]
-    LCS --> Score[Similarity Score 0-100]
-    Score --> Status{Plagiarism Status}
-    Status -->|>= 97%| Plagiarized[Plagiarized]
-    Status -->|30-96%| NeedsLLM[NeedsLlmVerification]
-    Status -->|< 30%| Clean[Clean]
+    Hash --> Compare[Pairwise Compare]
+    Compare --> LCS[LCS Score]
+    LCS --> Status{Status}
+    Status -->|>= 97| Plagiarized[Plagiarized]
+    Status -->|30-96| Review[Needs LLM Review]
+    Status -->|< 30| Clean[Clean]
 ```
 
 ---
 
 ## Features
 
-- **WASM Module**: Compiles to `wasm32-unknown-unknown`, loaded by platform validators
-- **AST Structural Similarity**: Normalizes Python code and compares structure via LCS algorithm
-- **LLM Plagiarism Detection**: Retry-enabled LLM inference for semantic comparison
-- **Submission Validation**: Size limits, format checks, and signature verification
-- **Conversation Dataset Generation**: Python harnesses produce JSONL conversation datasets
-- **Resource Limits**: CPU time, memory, and file size constraints for sandboxed execution
-- **Plagiarism Clustering**: Groups similar submissions by structure hash prefix
-- **CLI (df-cli)**: Native TUI for monitoring evaluations and network status
+- **Python Platform Challenge**: FastAPI service compatible with Platform proxy and master collection.
+- **Platform SDK Routes**: `/health`, `/version`, and `/internal/v1/get_weights`.
+- **Secure Execution Path**: Vendored Platform Docker executor with CLI and broker backends.
+- **Conversation JSONL Validation**: Enforces message schema, role flow, and minimum turns.
+- **Quality Scoring**: Combines format, semantic-shape heuristics, diversity, and originality.
+- **AST Safety Checks**: Blocks critical Python calls such as `exec`, `eval`, `__import__`, and `os.system`.
+- **AST Similarity**: Normalizes variable names and compares structure with LCS scoring.
+- **SQLite Persistence**: Stores submissions, metrics, logs, errors, and leaderboard state.
+- **Optional LLM Audit**: Retry-enabled HTTP client for semantic plagiarism review.
 
 ---
 
 ## Installation
 
 ```bash
-# Via Platform CLI (recommended)
-platform download data-fabrication
-
-# Or build from source
-git clone https://github.com/PlatformNetwork/data-fabrication
-cd data-fabrication
-cargo build --release
-```
-
----
-
-## Building
-
-```bash
-# Build WASM module (for platform validators)
-cargo build --target wasm32-unknown-unknown -p data-fabrication-wasm
-
-# The output .wasm file is at:
-# target/wasm32-unknown-unknown/release/data_fabrication_wasm.wasm
-
-# Build CLI (native)
-cargo build --release -p df-cli
-
-# Build executor
-cargo build --release -p df-executor
-
-# Build all workspace members
-cargo build --release --workspace
+python -m venv .venv
+source .venv/bin/activate
+python -m pip install -e ".[dev]"
 ```
 
 ---
 
 ## Usage
 
+Submit direct JSONL:
+
 ```bash
-# Launch interactive TUI (connects to https://chain.platform.network)
-df-cli monitor
-
-# Submit a Python harness
-df-cli submit --harness ./my-harness/
-
-# Check submission status
-df-cli status --hotkey 5Abc...
-
-# Monitor a specific miner
-df-cli --hotkey 5GrwvaEF... monitor
-
-# Custom RPC endpoint
-df-cli --rpc-url http://localhost:8080 monitor
+curl -X POST http://localhost:8080/submit \
+  -H "content-type: application/json" \
+  -d '{
+    "hotkey": "5Abc...",
+    "dataset_jsonl": "{\"messages\":[{\"role\":\"user\",\"content\":\"Explain gravity.\"},{\"role\":\"assistant\",\"content\":\"Gravity is the attraction between masses.\"}]}"
+  }'
 ```
 
-**Subcommands:** `submit` · `status` · `monitor` (default)
+Submit a Python harness:
 
-**TUI Controls:** `Tab`/`Shift+Tab` switch tabs · `↑`/`↓` scroll · `r` refresh · `q` quit
+```bash
+curl -X POST http://localhost:8080/submit \
+  -H "content-type: application/json" \
+  -d '{
+    "hotkey": "5Abc...",
+    "filename": "harness.py",
+    "code": "import json\nprint(json.dumps({\"messages\":[{\"role\":\"user\",\"content\":\"Give a detailed math prompt.\"},{\"role\":\"assistant\",\"content\":\"Here is a detailed synthetic answer with enough content for scoring.\"}]}))"
+  }'
+```
+
+Read results:
+
+```bash
+curl http://localhost:8080/leaderboard
+curl http://localhost:8080/status
+curl http://localhost:8080/submissions
+curl http://localhost:8080/internal/v1/get_weights \
+  -H "authorization: Bearer dev-secret" \
+  -H "x-platform-challenge-slug: data-fabrication"
+```
+
+**Public routes:** `/submit` · `/v1/submissions` · `/submissions` · `/leaderboard` · `/status` · `/stats` · `/dataset` · `/dataset/consensus` · `/agent/:hotkey` · `/results/:id`
+
+---
+
+## Building
+
+```bash
+# Lint
+ruff check src tests
+
+# Format check
+ruff format --check src tests
+
+# Type check
+mypy --config-file pyproject.toml src
+
+# Tests
+pytest tests
+
+# Docker image
+docker build -t data-fabrication .
+```
 
 ---
 
 ## Architecture
 
-```
+```text
 data-fabrication/
-├── wasm/                   # WASM evaluation module (compiled to wasm32-unknown-unknown)
-│   └── src/
-│       ├── lib.rs              # Challenge trait implementation
-│       └── types.rs            # Submission and config types
-├── core/                   # Shared types (no_std compatible)
-│   └── src/
-│       ├── lib.rs              # Domain types (HarnessSubmission, GeneratedDataset)
-│       ├── ast_similarity.rs   # AST normalization, structure hashing, LCS comparison
-│       ├── ast_validation.rs   # Python code security validation
-│       ├── scoring_types.rs    # Score types (ConversationScore, DatasetScore)
-│       ├── schema.rs           # JSONL parsing for conversation datasets
-│       ├── consensus.rs        # Multi-validator consensus
-│       ├── cache.rs            # Evaluation result caching
-│       └── resource_limits.rs  # CPU, memory, file constraints
-├── executor/               # Native execution engine
-│   └── src/
-│       ├── lib.rs              # Executor entry point
-│       └── llm_inference.rs    # LLM client with retry logic
-├── cli/                    # Native TUI monitoring tool
-│   └── src/
-│       ├── main.rs             # Entry point, event loop
-│       ├── app.rs              # Application state
-│       ├── ui.rs               # Ratatui UI rendering
-│       └── rpc.rs              # JSON-RPC 2.0 client
-├── server/                 # Native HTTP server
-│   └── src/
-│       └── main.rs             # HTTP evaluation server
-└── src/                    # Root crate library
-    └── lib.rs                  # HuggingFace dataset handler
+├── src/data_fabrication/
+│   ├── app.py                  # FastAPI entrypoint and internal bridge route
+│   ├── config.py               # Runtime settings
+│   ├── db.py                   # Async SQLite wrapper
+│   ├── models.py               # Pydantic API schemas
+│   ├── repository.py           # Persistence and leaderboard queries
+│   ├── routes.py               # Public Platform routes
+│   ├── weights.py              # Platform weight computation
+│   ├── evaluator/
+│   │   ├── ast_similarity.py   # AST normalization, hashing, LCS comparison
+│   │   ├── ast_validation.py   # Python safety checks
+│   │   ├── dataset.py          # JSONL parsing and schema validation
+│   │   ├── execution.py        # Harness execution and evaluation orchestration
+│   │   ├── llm.py              # Optional LLM plagiarism audit client
+│   │   └── scoring.py          # Dataset scoring
+│   └── sdk/                    # Platform-compatible app/auth/Docker helpers
+├── tests/                      # Unit and API tests
+├── config.example.yaml
+├── Dockerfile
+└── README.md
 ```
 
 ---
 
 ## How It Works
 
-1. Miners submit Python harness code via `df-cli submit`
-2. Platform validators load this WASM module
-3. WASM validates submission format, size limits, and signature
-4. Executor runs the Python harness in a sandboxed environment
-5. Generated conversations are parsed from JSONL output
-6. AST similarity compares submission structure against others using normalized variables and LCS algorithm
-7. LLM inference performs semantic plagiarism detection with retry logic
-8. Final score combines dataset quality and originality metrics
-9. Validators submit weights to Bittensor at epoch boundaries
+1. Miners submit a Python harness or a JSONL dataset.
+2. The service validates size, hotkey, and payload shape.
+3. Python harnesses are AST-checked before execution.
+4. Production execution uses the Platform Docker executor or broker.
+5. Harness output is parsed as conversation JSONL.
+6. The evaluator scores format, content quality, diversity, and originality.
+7. AST similarity utilities detect copy-style harness submissions.
+8. SQLite stores the full evaluation record.
+9. Platform reads `/internal/v1/get_weights` and receives best score per hotkey.
 
 ---
 
-## AST Similarity System
+## Scoring
 
-The plagiarism detection uses a two-pass approach:
+Final score:
 
-### Pass 1: Structural Comparison
-```python
-# Original code
-x = 1
-y = x + 2
-
-# After normalization (both produce identical AST)
-a = 1
-b = a + 2
+```text
+score = format * 0.2 + quality * 0.4 + originality * 0.4
 ```
 
-Variables are normalized to `var_0`, `var_1`, etc., and the AST structure is hashed. Submissions with matching structure hashes are clustered for detailed comparison.
-
-### Pass 2: LLM Semantic Analysis
-For submissions above a similarity threshold, an LLM evaluates:
-- Logic flow patterns
-- Naming convention similarities
-- Comment and docstring patterns
-
----
-
-## Documentation
-
-- [Architecture Overview](docs/architecture.md) — System components, host functions, storage schema
-- [Miner Quickstart](docs/miner/quickstart.md) — How to build and submit harnesses
-- [Executor Setup](docs/miner/executor-setup.md) — Deploy your evaluation node
-- [Evaluation Pipeline](docs/miner/evaluation-pipeline.md) — Scoring and plagiarism detection
-- [API Reference](docs/miner/api-reference.md) — Public and authenticated endpoints
-- [Validator Setup](docs/validator/setup.md) — Hardware requirements and configuration
+Datasets pass when the final score is at least `0.5`. Scores are already normalized to `[0, 1]`, so Platform weights can directly use each miner’s best completed score.
 
 ---
 

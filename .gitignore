@@ -1,5 +1,8 @@
 # Build artifacts
 /target/
+dist/
+build/
+*.egg-info/
 
 # IDE
 .idea/
@@ -14,6 +17,7 @@
 # Environment
 .env
 .env.*
+.venv/
 
 # OS
 .DS_Store
@@ -22,3 +26,13 @@ Thumbs.db
 # Logs
 *.log
 logs/
+
+# Python
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+*.sqlite3
+*.db
+/data/
