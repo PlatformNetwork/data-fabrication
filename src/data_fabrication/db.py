@@ -27,9 +27,15 @@ class Database:
                 id TEXT PRIMARY KEY,
                 hotkey TEXT NOT NULL,
                 code_hash TEXT NOT NULL,
+                artifact_hash TEXT,
                 filename TEXT,
                 harness_code TEXT,
                 dataset_jsonl TEXT,
+                artifact_json TEXT NOT NULL DEFAULT '{}',
+                static_review_json TEXT NOT NULL DEFAULT '{}',
+                judge_json TEXT NOT NULL DEFAULT '{}',
+                plagiarism_json TEXT NOT NULL DEFAULT '{}',
+                sample_jsonl TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL,
                 score REAL NOT NULL DEFAULT 0.0,
                 passed INTEGER NOT NULL DEFAULT 0,
@@ -49,6 +55,7 @@ class Database:
                 ON submissions(status, score DESC);
             """
         )
+        await self._ensure_columns()
         await self._connection.commit()
 
     async def close(self) -> None:
@@ -79,3 +86,19 @@ class Database:
         if self._connection is None:
             raise RuntimeError("database is not initialized")
         return self._connection
+
+    async def _ensure_columns(self) -> None:
+        connection = self._require_connection()
+        cursor = await connection.execute("PRAGMA table_info(submissions)")
+        existing = {str(row[1]) for row in await cursor.fetchall()}
+        columns = {
+            "artifact_hash": "TEXT",
+            "artifact_json": "TEXT NOT NULL DEFAULT '{}'",
+            "static_review_json": "TEXT NOT NULL DEFAULT '{}'",
+            "judge_json": "TEXT NOT NULL DEFAULT '{}'",
+            "plagiarism_json": "TEXT NOT NULL DEFAULT '{}'",
+            "sample_jsonl": "TEXT NOT NULL DEFAULT ''",
+        }
+        for name, definition in columns.items():
+            if name not in existing:
+                await connection.execute(f"ALTER TABLE submissions ADD COLUMN {name} {definition}")

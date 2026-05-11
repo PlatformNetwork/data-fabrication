@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from typing import Any
+
 from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request
 
 from .evaluator.execution import DataFabricationEvaluator
@@ -13,7 +15,9 @@ from .models import (
     StatusResponse,
     SubmissionCreate,
     SubmissionDetail,
+    SubmissionReport,
     SubmissionResponse,
+    SubmissionSamples,
     WeightResponse,
 )
 from .repository import DataFabricationRepository
@@ -33,23 +37,37 @@ def evaluator_from_request(request: Request) -> DataFabricationEvaluator:
 @public_route(tags=["submissions"], auth_required=True)
 @router.post("/submit", response_model=SubmissionResponse)
 async def submit(
-    payload: SubmissionCreate,
     background_tasks: BackgroundTasks,
     request: Request,
     repository: DataFabricationRepository = Depends(repo_from_request),
 ) -> SubmissionResponse:
-    return await _create_and_schedule(payload, background_tasks, request, repository)
+    payload, raw_package, filename = await _submission_from_request(request)
+    return await _create_and_schedule(
+        payload,
+        background_tasks,
+        request,
+        repository,
+        raw_package=raw_package,
+        filename=filename,
+    )
 
 
 @public_route(tags=["submissions"], auth_required=True)
 @router.post("/v1/submissions", response_model=SubmissionResponse)
 async def submit_v1(
-    payload: SubmissionCreate,
     background_tasks: BackgroundTasks,
     request: Request,
     repository: DataFabricationRepository = Depends(repo_from_request),
 ) -> SubmissionResponse:
-    return await _create_and_schedule(payload, background_tasks, request, repository)
+    payload, raw_package, filename = await _submission_from_request(request)
+    return await _create_and_schedule(
+        payload,
+        background_tasks,
+        request,
+        repository,
+        raw_package=raw_package,
+        filename=filename,
+    )
 
 
 @public_route(tags=["submissions"])
@@ -70,6 +88,30 @@ async def get_submission(
     if submission is None:
         raise HTTPException(status_code=404, detail="submission not found")
     return submission
+
+
+@public_route(tags=["submissions"])
+@router.get("/v1/submissions/{submission_id}/report", response_model=SubmissionReport)
+async def submission_report(
+    submission_id: str,
+    repository: DataFabricationRepository = Depends(repo_from_request),
+) -> SubmissionReport:
+    report = await repository.report(submission_id)
+    if report is None:
+        raise HTTPException(status_code=404, detail="submission not found")
+    return report
+
+
+@public_route(tags=["submissions"])
+@router.get("/v1/submissions/{submission_id}/samples", response_model=SubmissionSamples)
+async def submission_samples(
+    submission_id: str,
+    repository: DataFabricationRepository = Depends(repo_from_request),
+) -> SubmissionSamples:
+    samples = await repository.samples(submission_id)
+    if samples is None:
+        raise HTTPException(status_code=404, detail="submission not found")
+    return samples
 
 
 @public_route(tags=["leaderboard"])
@@ -161,11 +203,11 @@ async def agent_logs(
 async def agent_code(
     hotkey: str,
     repository: DataFabricationRepository = Depends(repo_from_request),
-) -> dict[str, str]:
+) -> dict[str, str | None]:
     submission = await repository.get_agent(hotkey)
     if submission is None:
         raise HTTPException(status_code=404, detail="agent not found")
-    return {"submission_id": submission.id, "code_hash": submission.code_hash}
+    return {"submission_id": submission.id, "artifact_hash": submission.artifact_hash}
 
 
 @public_route(tags=["results"])
@@ -182,27 +224,41 @@ async def _create_and_schedule(
     background_tasks: BackgroundTasks,
     request: Request,
     repository: DataFabricationRepository,
+    *,
+    raw_package: bytes | None = None,
+    filename: str | None = None,
 ) -> SubmissionResponse:
     settings = request.app.state.settings
     if not settings.public_submissions_enabled:
         raise HTTPException(status_code=404, detail="submission route disabled")
     try:
-        submission_id, dataset_jsonl, code = await repository.create_submission(payload)
+        submission_id = await repository.create_submission(
+            payload,
+            raw_package=raw_package,
+            filename=filename,
+        )
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc)) from exc
-    if dataset_jsonl is not None or code is not None:
-        background_tasks.add_task(
-            _evaluate_submission,
-            repository,
-            request.app.state.evaluator,
-            submission_id,
-            dataset_jsonl,
-            code,
-        )
+    background_tasks.add_task(
+        _evaluate_submission,
+        repository,
+        request.app.state.evaluator,
+        submission_id,
+    )
     submission = await repository.get_submission(submission_id)
     assert submission is not None
     return SubmissionResponse(
-        **submission.model_dump(exclude={"metrics", "violations", "stdout", "stderr"})
+        **submission.model_dump(
+            exclude={
+                "metrics",
+                "violations",
+                "stdout",
+                "stderr",
+                "static_review",
+                "judge",
+                "plagiarism",
+            }
+        )
     )
 
 
@@ -210,12 +266,49 @@ async def _evaluate_submission(
     repository: DataFabricationRepository,
     evaluator: DataFabricationEvaluator,
     submission_id: str,
-    dataset_jsonl: str | None,
-    code: str | None,
 ) -> None:
+    artifact = await repository.artifact(submission_id)
+    if artifact is None:
+        return
+    prior_artifacts = await repository.prior_artifacts(submission_id)
     evaluation = await evaluator.evaluate(
         submission_id=submission_id,
-        dataset_jsonl=dataset_jsonl,
-        harness_code=code,
+        artifact=artifact,
+        prior_artifacts=prior_artifacts,
     )
     await repository.mark_evaluated(submission_id, evaluation)
+
+
+async def _submission_from_request(
+    request: Request,
+) -> tuple[SubmissionCreate, bytes | None, str | None]:
+    content_type = request.headers.get("content-type", "").lower()
+    if "application/json" in content_type:
+        payload = SubmissionCreate.model_validate(await request.json())
+        return payload, None, payload.filename
+    hotkey = _request_hotkey(request)
+    filename = request.headers.get("x-submission-filename") or "submission.zip"
+    if "multipart/form-data" in content_type:
+        form = await request.form()
+        upload: Any = form.get("file") or form.get("package") or form.get("artifact")
+        if upload is None or not hasattr(upload, "read"):
+            raise HTTPException(
+                status_code=400,
+                detail="multipart upload requires a ZIP file field",
+            )
+        raw = await upload.read()
+        filename = getattr(upload, "filename", None) or filename
+        return SubmissionCreate(hotkey=hotkey, filename=filename), raw, filename
+    raw = await request.body()
+    return SubmissionCreate(hotkey=hotkey, filename=filename), raw, filename
+
+
+def _request_hotkey(request: Request) -> str:
+    hotkey = (
+        request.headers.get("x-miner-hotkey")
+        or request.headers.get("x-platform-verified-hotkey")
+        or request.query_params.get("hotkey")
+    )
+    if not hotkey:
+        raise HTTPException(status_code=400, detail="missing hotkey")
+    return hotkey

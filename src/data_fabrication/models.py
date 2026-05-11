@@ -6,13 +6,10 @@ from pydantic import BaseModel, Field
 
 
 class SubmissionCreate(BaseModel):
-    """Miner submission with either direct JSONL or Python harness code."""
+    """Miner submission containing a base64-encoded ZIP harness."""
 
     hotkey: str | None = Field(default=None, min_length=1, max_length=128)
     miner_hotkey: str | None = Field(default=None, min_length=1, max_length=128)
-    code: str | None = Field(default=None, min_length=1, repr=False)
-    harness_code: str | None = Field(default=None, min_length=1, repr=False)
-    dataset_jsonl: str | None = Field(default=None, min_length=1, repr=False)
     package_base64: str | None = Field(default=None, min_length=1, repr=False)
     filename: str | None = Field(default=None, max_length=256)
     signature: str | None = Field(default=None, max_length=512)
@@ -20,10 +17,6 @@ class SubmissionCreate(BaseModel):
     @property
     def resolved_hotkey(self) -> str:
         return self.hotkey or self.miner_hotkey or ""
-
-    @property
-    def resolved_code(self) -> str | None:
-        return self.code or self.harness_code
 
 
 class SubmissionResponse(BaseModel):
@@ -35,6 +28,7 @@ class SubmissionResponse(BaseModel):
     passed: bool
     conversation_count: int
     total_messages: int
+    artifact_hash: str | None = None
     error: str | None = None
 
 
@@ -44,6 +38,23 @@ class SubmissionDetail(SubmissionResponse):
     violations: list[dict]
     stdout: str = ""
     stderr: str = ""
+    static_review: dict | None = None
+    judge: dict | None = None
+    plagiarism: dict | None = None
+
+
+class SubmissionReport(BaseModel):
+    submission_id: str
+    metrics: dict
+    static_review: dict | None = None
+    judge: dict | None = None
+    plagiarism: dict | None = None
+    violations: list[dict]
+
+
+class SubmissionSamples(BaseModel):
+    submission_id: str
+    jsonl: str
 
 
 class LeaderboardEntry(BaseModel):
@@ -71,11 +82,11 @@ class StatusResponse(BaseModel):
 
 
 class DatasetResponse(BaseModel):
-    dataset_schema: str = Field(default="conversation-jsonl", alias="schema")
+    dataset_schema: str = Field(default="agentic-coding-conversation-jsonl", alias="schema")
     min_conversations: int
     max_conversations: int
-    required_fields: list[str] = ["messages"]
-    roles: list[str] = ["system", "user", "assistant", "function"]
+    required_fields: list[str] = ["task", "tools", "messages", "final"]
+    roles: list[str] = ["system", "user", "assistant", "tool", "function"]
 
 
 class DatasetConsensusResponse(BaseModel):

@@ -5,7 +5,7 @@ from __future__ import annotations
 import json
 from dataclasses import dataclass, field
 from hashlib import sha256
-from typing import Any
+from typing import Any, cast
 
 
 class SchemaError(ValueError):
@@ -19,16 +19,29 @@ class FunctionCall:
 
 
 @dataclass(frozen=True)
+class ToolCall:
+    name: str
+    arguments: dict[str, Any]
+    id: str | None = None
+
+
+@dataclass(frozen=True)
 class Message:
     role: str
     content: str = ""
     name: str | None = None
+    reasoning: str | None = None
     function_call: FunctionCall | None = None
+    tool_calls: list[ToolCall] = field(default_factory=list)
 
 
 @dataclass(frozen=True)
 class ConversationEntry:
+    id: str | None
+    task: dict[str, Any]
     messages: list[Message]
+    tools: list[dict[str, Any]] = field(default_factory=list)
+    final: dict[str, Any] = field(default_factory=dict)
     function_calls: list[FunctionCall] | None = None
     thinking: str | None = None
     metadata: dict[str, Any] = field(default_factory=dict)
@@ -82,7 +95,7 @@ def validate_conversation(entry: ConversationEntry, line_num: int = 1) -> None:
     if not validate_role_sequence(entry.messages):
         raise SchemaError(f"line {line_num}: invalid role sequence")
     for message in entry.messages:
-        if not message.content and message.function_call is None:
+        if not message.content and message.function_call is None and not message.tool_calls:
             raise SchemaError(f"line {line_num}: message content is empty")
 
 
@@ -97,10 +110,14 @@ def validate_role_sequence(messages: list[Message]) -> bool:
         ("system", "assistant"),
         ("user", "assistant"),
         ("user", "function"),
+        ("user", "tool"),
         ("assistant", "user"),
         ("assistant", "function"),
+        ("assistant", "tool"),
         ("function", "user"),
         ("function", "assistant"),
+        ("tool", "assistant"),
+        ("tool", "user"),
     }
     return all(
         (prev.role, curr.role) in valid_pairs
@@ -125,9 +142,16 @@ def _parse_line(line: str, line_num: int) -> ConversationEntry:
     messages = payload["messages"]
     if not isinstance(messages, list):
         raise SchemaError(f"line {line_num}: messages must be a list")
+    task_raw = payload.get("task")
+    tools_raw = payload.get("tools")
+    final_raw = payload.get("final")
     metadata = payload.get("metadata")
     entry = ConversationEntry(
+        id=payload.get("id") if isinstance(payload.get("id"), str) else None,
+        task=cast(dict[str, Any], task_raw) if isinstance(task_raw, dict) else {},
         messages=[_parse_message(message, line_num) for message in messages],
+        tools=cast(list[dict[str, Any]], tools_raw) if isinstance(tools_raw, list) else [],
+        final=cast(dict[str, Any], final_raw) if isinstance(final_raw, dict) else {},
         function_calls=_parse_function_calls(payload.get("function_calls"), line_num),
         thinking=payload.get("thinking") if isinstance(payload.get("thinking"), str) else None,
         metadata=metadata if isinstance(metadata, dict) else {},
@@ -151,7 +175,9 @@ def _parse_message(payload: object, line_num: int) -> Message:
         role=role,
         content=content,
         name=payload.get("name") if isinstance(payload.get("name"), str) else None,
+        reasoning=payload.get("reasoning") if isinstance(payload.get("reasoning"), str) else None,
         function_call=_parse_function_call(payload.get("function_call"), line_num),
+        tool_calls=_parse_tool_calls(payload.get("tool_calls"), line_num),
     )
 
 
@@ -179,22 +205,60 @@ def _parse_function_calls(payload: object, line_num: int) -> list[FunctionCall] 
     ]
 
 
+def _parse_tool_calls(payload: object, line_num: int) -> list[ToolCall]:
+    if payload is None:
+        return []
+    if not isinstance(payload, list):
+        raise SchemaError(f"line {line_num}: tool_calls must be a list")
+    tool_calls: list[ToolCall] = []
+    for item in payload:
+        if not isinstance(item, dict):
+            raise SchemaError(f"line {line_num}: tool call must be an object")
+        name = item.get("name")
+        arguments = item.get("arguments", {})
+        if not isinstance(name, str):
+            raise SchemaError(f"line {line_num}: tool call name is required")
+        if not isinstance(arguments, dict):
+            raise SchemaError(f"line {line_num}: tool call arguments must be an object")
+        tool_calls.append(
+            ToolCall(
+                name=name,
+                arguments=arguments,
+                id=item.get("id") if isinstance(item.get("id"), str) else None,
+            )
+        )
+    return tool_calls
+
+
 def _conversation_to_dict(entry: ConversationEntry) -> dict[str, object]:
     return {
+        "id": entry.id,
+        "task": entry.task,
         "messages": [
             {
                 "role": message.role,
                 "content": message.content,
                 "name": message.name,
+                "reasoning": message.reasoning,
                 "function_call": None
                 if message.function_call is None
                 else {
                     "name": message.function_call.name,
                     "arguments": message.function_call.arguments,
                 },
+                "tool_calls": [
+                    {
+                        "id": tool_call.id,
+                        "name": tool_call.name,
+                        "arguments": tool_call.arguments,
+                    }
+                    for tool_call in message.tool_calls
+                ],
             }
             for message in entry.messages
         ],
+        "tools": entry.tools,
+        "final": entry.final,
         "function_calls": None
         if entry.function_calls is None
         else [

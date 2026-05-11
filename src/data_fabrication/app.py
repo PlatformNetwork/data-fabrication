@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Annotated
 
 from fastapi import BackgroundTasks, Depends, FastAPI, Header, HTTPException, Request
@@ -24,6 +25,9 @@ def create_app(app_settings: DataFabricationSettings = settings) -> FastAPI:
     repository = DataFabricationRepository(
         database,
         max_submission_size_bytes=app_settings.max_submission_size_bytes,
+        artifact_root=Path(app_settings.artifact_root),
+        max_zip_files=app_settings.max_zip_files,
+        max_zip_uncompressed_bytes=app_settings.max_zip_uncompressed_bytes,
     )
     evaluator = DataFabricationEvaluator(app_settings)
 
@@ -55,24 +59,24 @@ def create_app(app_settings: DataFabricationSettings = settings) -> FastAPI:
         body = await request.body()
         if len(body) > app_settings.max_submission_size_bytes:
             raise HTTPException(status_code=413, detail="submission too large")
-        text = body.decode("utf-8", errors="replace")
         payload = SubmissionCreate(
             hotkey=x_platform_verified_hotkey,
             filename=x_submission_filename,
-            code=text if (x_submission_filename or "").endswith(".py") else None,
-            dataset_jsonl=None if (x_submission_filename or "").endswith(".py") else text,
         )
-        submission_id, dataset_jsonl, code = await repository.create_submission(
-            payload,
-            verified_hotkey=x_platform_verified_hotkey,
-        )
+        try:
+            submission_id = await repository.create_submission(
+                payload,
+                verified_hotkey=x_platform_verified_hotkey,
+                raw_package=body,
+                filename=x_submission_filename or "submission.zip",
+            )
+        except ValueError as exc:
+            raise HTTPException(status_code=400, detail=str(exc)) from exc
         background_tasks.add_task(
             _evaluate_submission,
             repository,
             evaluator,
             submission_id,
-            dataset_jsonl,
-            code,
         )
         submission = await repository.get_submission(submission_id)
         assert submission is not None

@@ -6,9 +6,15 @@ from dataclasses import dataclass
 
 from .dataset import ConversationEntry, conversation_hash, validate_role_sequence
 
-FORMAT_WEIGHT = 0.2
-QUALITY_WEIGHT = 0.4
-ORIGINALITY_WEIGHT = 0.4
+FORMAT_WEIGHT = 0.10
+QUALITY_WEIGHT = 0.25
+ORIGINALITY_WEIGHT = 0.15
+AGENTIC_WEIGHT = 0.15
+REASONING_WEIGHT = 0.10
+FUNCTION_CALL_WEIGHT = 0.10
+CODING_RELEVANCE_WEIGHT = 0.08
+VERIFIABILITY_WEIGHT = 0.05
+DIVERSITY_WEIGHT = 0.02
 
 
 @dataclass(frozen=True)
@@ -16,6 +22,12 @@ class DatasetQualityMetrics:
     format_score: float
     quality_score: float
     originality_score: float
+    agentic_score: float = 0.0
+    reasoning_score: float = 0.0
+    function_call_score: float = 0.0
+    coding_relevance_score: float = 0.0
+    verifiability_score: float = 0.0
+    diversity_score: float = 0.0
 
 
 @dataclass(frozen=True)
@@ -35,7 +47,17 @@ def calculate_score(metrics: DatasetQualityMetrics) -> float:
     fmt = _clamp(metrics.format_score)
     quality = _clamp(metrics.quality_score)
     originality = _clamp(metrics.originality_score)
-    return fmt * FORMAT_WEIGHT + quality * QUALITY_WEIGHT + originality * ORIGINALITY_WEIGHT
+    return _clamp(
+        fmt * FORMAT_WEIGHT
+        + quality * QUALITY_WEIGHT
+        + originality * ORIGINALITY_WEIGHT
+        + _clamp(metrics.agentic_score) * AGENTIC_WEIGHT
+        + _clamp(metrics.reasoning_score) * REASONING_WEIGHT
+        + _clamp(metrics.function_call_score) * FUNCTION_CALL_WEIGHT
+        + _clamp(metrics.coding_relevance_score) * CODING_RELEVANCE_WEIGHT
+        + _clamp(metrics.verifiability_score) * VERIFIABILITY_WEIGHT
+        + _clamp(metrics.diversity_score) * DIVERSITY_WEIGHT
+    )
 
 
 def aggregate_scores(scores: list[float]) -> float:
@@ -75,6 +97,12 @@ def evaluate_dataset(
         format_score=metrics.format_score,
         quality_score=metrics.quality_score,
         originality_score=_clamp(metrics.originality_score * plagiarism_score),
+        agentic_score=metrics.agentic_score,
+        reasoning_score=metrics.reasoning_score,
+        function_call_score=metrics.function_call_score,
+        coding_relevance_score=metrics.coding_relevance_score,
+        verifiability_score=metrics.verifiability_score,
+        diversity_score=metrics.diversity_score,
     )
     final_score = calculate_score(adjusted)
     total_messages = sum(len(entry.messages) for entry in conversations)
@@ -95,6 +123,12 @@ def calculate_quality(conversations: list[ConversationEntry]) -> DatasetQualityM
         format_score=_format_score(conversations),
         quality_score=_content_quality(conversations),
         originality_score=_originality_score(conversations),
+        agentic_score=_agentic_score(conversations),
+        reasoning_score=_reasoning_score(conversations),
+        function_call_score=_function_call_score(conversations),
+        coding_relevance_score=_coding_relevance_score(conversations),
+        verifiability_score=_verifiability_score(conversations),
+        diversity_score=_dataset_diversity_score(conversations),
     )
 
 
@@ -161,6 +195,125 @@ def _originality_score(conversations: list[ConversationEntry]) -> float:
     uniqueness = len(hashes) / len(conversations)
     penalty = _internal_similarity_penalty(conversations)
     return _clamp(uniqueness * (1.0 - penalty))
+
+
+def _agentic_score(conversations: list[ConversationEntry]) -> float:
+    if not conversations:
+        return 0.0
+    scored = 0.0
+    for entry in conversations:
+        has_tools = bool(entry.tools)
+        has_tool_calls = any(
+            message.tool_calls or message.function_call for message in entry.messages
+        )
+        has_tool_results = any(message.role in {"tool", "function"} for message in entry.messages)
+        scored += (float(has_tools) + float(has_tool_calls) + float(has_tool_results)) / 3.0
+    return _clamp(scored / len(conversations))
+
+
+def _reasoning_score(conversations: list[ConversationEntry]) -> float:
+    assistant_messages = [
+        message
+        for entry in conversations
+        for message in entry.messages
+        if message.role == "assistant"
+    ]
+    if not assistant_messages:
+        return 0.0
+    useful = [
+        message
+        for message in assistant_messages
+        if message.reasoning and len(message.reasoning.split()) >= 8
+    ]
+    return _clamp(len(useful) / len(assistant_messages))
+
+
+def _function_call_score(conversations: list[ConversationEntry]) -> float:
+    if not conversations:
+        return 0.0
+    allowed = {"read", "grep", "bash", "list_dir", "edit", "test", "python"}
+    scores: list[float] = []
+    for entry in conversations:
+        declared = {str(tool.get("name")) for tool in entry.tools if isinstance(tool, dict)}
+        calls = [call for message in entry.messages for call in message.tool_calls]
+        function_calls = [
+            message.function_call for message in entry.messages if message.function_call is not None
+        ]
+        if not calls and not function_calls:
+            scores.append(0.0)
+            continue
+        valid_calls = sum(
+            1
+            for call in calls
+            if call.name in allowed or call.name in declared or bool(call.arguments)
+        )
+        valid_functions = sum(1 for call in function_calls if bool(call.name))
+        total = len(calls) + len(function_calls)
+        scores.append((valid_calls + valid_functions) / total)
+    return _clamp(sum(scores) / len(scores))
+
+
+def _coding_relevance_score(conversations: list[ConversationEntry]) -> float:
+    keywords = {
+        "code",
+        "bug",
+        "test",
+        "patch",
+        "repo",
+        "function",
+        "class",
+        "debug",
+        "refactor",
+        "swe",
+        "benchmark",
+    }
+    if not conversations:
+        return 0.0
+    scores = []
+    for entry in conversations:
+        text = " ".join(
+            [
+                str(entry.task.get("type", "")),
+                str(entry.task.get("prompt", "")),
+                " ".join(message.content for message in entry.messages),
+                str(entry.metadata.get("benchmark_tags", "")),
+            ]
+        ).lower()
+        hits = sum(1 for keyword in keywords if keyword in text)
+        scores.append(min(1.0, hits / 4.0))
+    return _clamp(sum(scores) / len(scores))
+
+
+def _verifiability_score(conversations: list[ConversationEntry]) -> float:
+    if not conversations:
+        return 0.0
+    scores = []
+    for entry in conversations:
+        final = entry.final
+        has_patch = bool(final.get("patch") or final.get("answer"))
+        tests = final.get("tests")
+        has_tests = isinstance(tests, list) and bool(tests)
+        has_grounding = any(message.role in {"tool", "function"} for message in entry.messages)
+        scores.append((float(has_patch) + float(has_tests) + float(has_grounding)) / 3.0)
+    return _clamp(sum(scores) / len(scores))
+
+
+def _dataset_diversity_score(conversations: list[ConversationEntry]) -> float:
+    if not conversations:
+        return 0.0
+    task_types = {str(entry.task.get("type", "")) for entry in conversations if entry.task}
+    difficulties = {str(entry.task.get("difficulty", "")) for entry in conversations if entry.task}
+    tool_names = {
+        call.name
+        for entry in conversations
+        for message in entry.messages
+        for call in message.tool_calls
+    }
+    return _clamp(
+        min(1.0, len(task_types) / 4.0) * 0.4
+        + min(1.0, len(difficulties) / 3.0) * 0.2
+        + min(1.0, len(tool_names) / 3.0) * 0.4
+    )
 
 
 def _internal_similarity_penalty(conversations: list[ConversationEntry]) -> float:

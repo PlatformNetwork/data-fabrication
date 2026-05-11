@@ -17,16 +17,23 @@ class DataFabricationSettings(ChallengeSettings):
 
     max_submission_size_bytes: int = 4 * 1024 * 1024
     max_output_size_bytes: int = 10 * 1024 * 1024
+    max_zip_files: int = 128
+    max_zip_uncompressed_bytes: int = 32 * 1024 * 1024
+    artifact_root: str = "/data/submissions"
     evaluation_timeout_seconds: int = 300
     max_conversations: int = 10_000
     min_conversations: int = 1
+    sample_preview_limit: int = 25
     llm_plagiarism_enabled: bool = False
+    llm_judge_enabled: bool = False
     llm_endpoint: str = "http://localhost:11434/api/chat"
     llm_model: str = "llama3"
     llm_timeout_seconds: float = 60.0
     llm_max_retries: int = 3
     public_submissions_enabled: bool = True
     direct_subprocess_enabled: bool = False
+    runner_seed: int = 1337
+    runner_output_filename: str = "dataset.jsonl"
 
     def model_post_init(self, __context: Any) -> None:
         """Accept Platform orchestrator CHALLENGE_* env vars in addition to project vars."""
@@ -37,6 +44,7 @@ class DataFabricationSettings(ChallengeSettings):
             "version": ("CHALLENGE_VERSION",),
             "database_url": ("CHALLENGE_DATABASE_URL",),
             "data_dir": ("CHALLENGE_DATA_DIR",),
+            "artifact_root": ("CHALLENGE_ARTIFACT_ROOT",),
             "shared_token": ("CHALLENGE_SHARED_TOKEN",),
             "shared_token_file": ("CHALLENGE_SHARED_TOKEN_FILE",),
             "host": ("CHALLENGE_HOST",),
