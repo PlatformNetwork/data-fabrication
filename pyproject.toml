@@ -1,7 +1,7 @@
 [project]
 name = "data-fabrication"
 version = "0.1.0"
-description = "Python Platform SDK challenge for synthetic conversation dataset fabrication"
+description = "Rewards miners for fabricating high-quality agentic coding conversation datasets"
 requires-python = ">=3.12"
 dependencies = [
   "aiosqlite>=0.20.0",
